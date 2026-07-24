@@ -16,10 +16,11 @@ const SUGGESTIONS = [
   { i: Clock, l: "Who hasn't paid me in over 14 days?" },
 ];
 
+type Msg = { role: "ai" | "user"; text: string };
 function AiPage() {
   const [input, setInput] = useState("");
-  const [msgs, setMsgs] = useState([
-    { role: "ai" as const, text: "Hi Ariana — I'm SILEX. I read your entire workspace so you don't have to. Ask me anything about your business, or start with a suggestion." },
+  const [msgs, setMsgs] = useState<Msg[]>([
+    { role: "ai", text: "Hi Ariana — I'm SILEX. I read your entire workspace so you don't have to. Ask me anything about your business, or start with a suggestion." },
   ]);
 
   const send = (t: string) => {
