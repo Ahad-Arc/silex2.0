@@ -13,6 +13,12 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as AppInvoicesRouteImport } from './routes/app.invoices'
+import { Route as AppClientsRouteImport } from './routes/app.clients'
+import { Route as AppInvoicesNewRouteImport } from './routes/app.invoices.new'
+import { Route as AppInvoicesIdRouteImport } from './routes/app.invoices.$id'
+import { Route as AppClientsIdRouteImport } from './routes/app.clients.$id'
 
 const OnboardingRoute = OnboardingRouteImport.update({
   id: '/onboarding',
@@ -34,37 +40,114 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppIndexRoute = AppIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppInvoicesRoute = AppInvoicesRouteImport.update({
+  id: '/invoices',
+  path: '/invoices',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppClientsRoute = AppClientsRouteImport.update({
+  id: '/clients',
+  path: '/clients',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppInvoicesNewRoute = AppInvoicesNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppInvoicesRoute,
+} as any)
+const AppInvoicesIdRoute = AppInvoicesIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppInvoicesRoute,
+} as any)
+const AppClientsIdRoute = AppClientsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppClientsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/app': typeof AppRoute
+  '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/onboarding': typeof OnboardingRoute
+  '/app/clients': typeof AppClientsRouteWithChildren
+  '/app/invoices': typeof AppInvoicesRouteWithChildren
+  '/app/': typeof AppIndexRoute
+  '/app/clients/$id': typeof AppClientsIdRoute
+  '/app/invoices/$id': typeof AppInvoicesIdRoute
+  '/app/invoices/new': typeof AppInvoicesNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/app': typeof AppRoute
   '/auth': typeof AuthRoute
   '/onboarding': typeof OnboardingRoute
+  '/app/clients': typeof AppClientsRouteWithChildren
+  '/app/invoices': typeof AppInvoicesRouteWithChildren
+  '/app': typeof AppIndexRoute
+  '/app/clients/$id': typeof AppClientsIdRoute
+  '/app/invoices/$id': typeof AppInvoicesIdRoute
+  '/app/invoices/new': typeof AppInvoicesNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/app': typeof AppRoute
+  '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/onboarding': typeof OnboardingRoute
+  '/app/clients': typeof AppClientsRouteWithChildren
+  '/app/invoices': typeof AppInvoicesRouteWithChildren
+  '/app/': typeof AppIndexRoute
+  '/app/clients/$id': typeof AppClientsIdRoute
+  '/app/invoices/$id': typeof AppInvoicesIdRoute
+  '/app/invoices/new': typeof AppInvoicesNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/auth' | '/onboarding'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/auth'
+    | '/onboarding'
+    | '/app/clients'
+    | '/app/invoices'
+    | '/app/'
+    | '/app/clients/$id'
+    | '/app/invoices/$id'
+    | '/app/invoices/new'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app' | '/auth' | '/onboarding'
-  id: '__root__' | '/' | '/app' | '/auth' | '/onboarding'
+  to:
+    | '/'
+    | '/auth'
+    | '/onboarding'
+    | '/app/clients'
+    | '/app/invoices'
+    | '/app'
+    | '/app/clients/$id'
+    | '/app/invoices/$id'
+    | '/app/invoices/new'
+  id:
+    | '__root__'
+    | '/'
+    | '/app'
+    | '/auth'
+    | '/onboarding'
+    | '/app/clients'
+    | '/app/invoices'
+    | '/app/'
+    | '/app/clients/$id'
+    | '/app/invoices/$id'
+    | '/app/invoices/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AppRoute: typeof AppRoute
+  AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
   OnboardingRoute: typeof OnboardingRoute
 }
@@ -99,12 +182,94 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/': {
+      id: '/app/'
+      path: '/'
+      fullPath: '/app/'
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/invoices': {
+      id: '/app/invoices'
+      path: '/invoices'
+      fullPath: '/app/invoices'
+      preLoaderRoute: typeof AppInvoicesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/clients': {
+      id: '/app/clients'
+      path: '/clients'
+      fullPath: '/app/clients'
+      preLoaderRoute: typeof AppClientsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/invoices/new': {
+      id: '/app/invoices/new'
+      path: '/new'
+      fullPath: '/app/invoices/new'
+      preLoaderRoute: typeof AppInvoicesNewRouteImport
+      parentRoute: typeof AppInvoicesRoute
+    }
+    '/app/invoices/$id': {
+      id: '/app/invoices/$id'
+      path: '/$id'
+      fullPath: '/app/invoices/$id'
+      preLoaderRoute: typeof AppInvoicesIdRouteImport
+      parentRoute: typeof AppInvoicesRoute
+    }
+    '/app/clients/$id': {
+      id: '/app/clients/$id'
+      path: '/$id'
+      fullPath: '/app/clients/$id'
+      preLoaderRoute: typeof AppClientsIdRouteImport
+      parentRoute: typeof AppClientsRoute
+    }
   }
 }
 
+interface AppClientsRouteChildren {
+  AppClientsIdRoute: typeof AppClientsIdRoute
+}
+
+const AppClientsRouteChildren: AppClientsRouteChildren = {
+  AppClientsIdRoute: AppClientsIdRoute,
+}
+
+const AppClientsRouteWithChildren = AppClientsRoute._addFileChildren(
+  AppClientsRouteChildren,
+)
+
+interface AppInvoicesRouteChildren {
+  AppInvoicesIdRoute: typeof AppInvoicesIdRoute
+  AppInvoicesNewRoute: typeof AppInvoicesNewRoute
+}
+
+const AppInvoicesRouteChildren: AppInvoicesRouteChildren = {
+  AppInvoicesIdRoute: AppInvoicesIdRoute,
+  AppInvoicesNewRoute: AppInvoicesNewRoute,
+}
+
+const AppInvoicesRouteWithChildren = AppInvoicesRoute._addFileChildren(
+  AppInvoicesRouteChildren,
+)
+
+interface AppRouteChildren {
+  AppClientsRoute: typeof AppClientsRouteWithChildren
+  AppInvoicesRoute: typeof AppInvoicesRouteWithChildren
+  AppIndexRoute: typeof AppIndexRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppClientsRoute: AppClientsRouteWithChildren,
+  AppInvoicesRoute: AppInvoicesRouteWithChildren,
+  AppIndexRoute: AppIndexRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AppRoute: AppRoute,
+  AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
   OnboardingRoute: OnboardingRoute,
 }
