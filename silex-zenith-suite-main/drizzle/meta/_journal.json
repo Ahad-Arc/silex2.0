@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1786338592507,
+      "tag": "0000_deep_spiral",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786338600000,
+      "tag": "0001_outbox_m53_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786338700000,
+      "tag": "0002_webhook_deliveries_m54",
+      "breakpoints": true
+    }
+  ]
+}
