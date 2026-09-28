@@ -17,6 +17,17 @@ dist-ssr
 *.local
 .env
 .env.*
+!.env.example
+
+# Testing & Coverage
+coverage/
+
+# Local databases & scratch
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.db
+scratch/
 
 # Wrangler / Cloudflare
 .wrangler/

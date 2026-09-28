@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireWorkspaceAccess } from "@/lib/auth/workspace";
 import { db } from "@/db";
-import { invoices, invoiceItems, payments, workspaceSettings, clients, clientContacts } from "@/db/schema";
+import { invoices, invoiceItems, payments, workspaceSettings, clients, clientContacts, expenses, projects } from "@/db/schema";
 import { eq, and, isNull, desc, sql, gte, lte } from "drizzle-orm";
 
 // Input Schemas
@@ -48,6 +48,12 @@ export const createPaymentInputSchema = z.object({
   paymentMethod: z.string().min(1, "Payment method is required"),
   transactionReference: z.string().optional(),
   paidAt: z.string().optional(),
+  workspaceId: z.string().optional(),
+});
+
+export const updateInvoiceStatusInputSchema = z.object({
+  invoiceId: z.string().min(1, "Invoice ID is required"),
+  status: z.enum(["draft", "sent", "paid", "overdue", "cancelled"]),
   workspaceId: z.string().optional(),
 });
 
@@ -432,7 +438,8 @@ export const createInvoiceFn = createServerFn({ method: "POST" })
 
 /**
  * Server Function: getPaymentsFn
- * Retrieves all transaction ledger entries for the authorized workspace.
+ * Retrieves all transaction ledger entries (incoming client payments and outgoing expenses)
+ * for the authorized workspace.
  */
 export const getPaymentsFn = createServerFn({ method: "GET" })
   .validator((data?: unknown) => getPaymentsInputSchema.parse(data ?? {}))
@@ -443,7 +450,8 @@ export const getPaymentsFn = createServerFn({ method: "GET" })
       throw new Error("Database client is uninitialized.");
     }
 
-    const rows = await db
+    // 1. Fetch incoming invoice payments
+    const paymentRows = await db
       .select({
         payment: payments,
         invoice: {
@@ -460,14 +468,31 @@ export const getPaymentsFn = createServerFn({ method: "GET" })
       .where(eq(payments.workspaceId, auth.workspaceId))
       .orderBy(desc(payments.paidAt));
 
-    let cashAvailableCents = 0;
+    // 2. Fetch outgoing business expenses
+    const expenseRows = await db
+      .select({
+        expense: expenses,
+        project: {
+          id: projects.id,
+          name: projects.name,
+        },
+      })
+      .from(expenses)
+      .leftJoin(projects, eq(expenses.projectId, projects.id))
+      .where(
+        and(
+          eq(expenses.workspaceId, auth.workspaceId),
+          isNull(expenses.deletedAt)
+        )
+      )
+      .orderBy(desc(expenses.expenseDate));
+
     let incomingCents = 0;
     let outgoingCents = 0;
 
-    const formattedPayments = rows.map(({ payment, invoice, client }) => {
+    const formattedPayments = paymentRows.map(({ payment, invoice, client }) => {
       if (payment.amountCents > 0) {
         incomingCents += payment.amountCents;
-        cashAvailableCents += payment.amountCents;
       } else {
         outgoingCents += Math.abs(payment.amountCents);
       }
@@ -481,11 +506,39 @@ export const getPaymentsFn = createServerFn({ method: "GET" })
         paymentMethod: payment.paymentMethod,
         transactionReference: payment.transactionReference,
         paidAt: payment.paidAt.toISOString(),
+        type: "payment" as const,
+        category: "Invoice Payment",
+        projectName: null as string | null,
       };
     });
 
+    const formattedExpenses = expenseRows.map(({ expense, project }) => {
+      outgoingCents += expense.amountCents;
+
+      return {
+        id: expense.id,
+        clientName: expense.vendorName || "General Expense",
+        invoiceNumber: expense.category,
+        amountCents: -Math.abs(expense.amountCents),
+        currency: expense.currency,
+        paymentMethod: expense.category,
+        transactionReference: expense.receiptUrl || null,
+        paidAt: expense.expenseDate.toISOString(),
+        type: "expense" as const,
+        category: expense.category,
+        projectName: project?.name || null,
+      };
+    });
+
+    // Combined sorted ledger: newest first
+    const combinedLedger = [...formattedPayments, ...formattedExpenses].sort(
+      (a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime()
+    );
+
+    const cashAvailableCents = Math.max(0, incomingCents - outgoingCents);
+
     return {
-      payments: formattedPayments,
+      payments: combinedLedger,
       stats: {
         cashAvailableCents,
         incomingCents,
@@ -605,4 +658,82 @@ export const createPaymentFn = createServerFn({ method: "POST" })
         isFullyPaid,
       };
     });
+  });
+
+/**
+ * Server Function: updateInvoiceStatusFn
+ * Updates the lifecycle status of an authorized invoice (draft, sent, paid, overdue, cancelled).
+ */
+export const updateInvoiceStatusFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) => updateInvoiceStatusInputSchema.parse(data))
+  .handler(async ({ data }) => {
+    if (typeof window !== "undefined") {
+      throw new Error("[SILEX Security Guard] Execution prohibited in browser context.");
+    }
+
+    const auth = await requireWorkspaceAccess({ workspaceId: data.workspaceId });
+
+    if (!db) {
+      throw new Error("Database client is uninitialized.");
+    }
+
+    const invoiceRows = await db
+      .select()
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.id, data.invoiceId),
+          eq(invoices.workspaceId, auth.workspaceId),
+          isNull(invoices.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (invoiceRows.length === 0) {
+      throw new Error("Target invoice does not exist or does not belong to authorized workspace.");
+    }
+
+    const invoice = invoiceRows[0];
+
+    const updates: Partial<typeof invoices.$inferInsert> = {
+      status: data.status,
+      updatedAt: new Date(),
+    };
+
+    if (data.status === "paid" && invoice.amountPaidCents < invoice.totalCents) {
+      updates.amountPaidCents = invoice.totalCents;
+    }
+
+    const [updated] = await db
+      .update(invoices)
+      .set(updates)
+      .where(eq(invoices.id, invoice.id))
+      .returning();
+
+    // If transitioned to paid, publish invoice.paid domain event
+    if (data.status === "paid" && invoice.status !== "paid") {
+      const { publishDomainEvent } = await import("@/lib/events");
+      await publishDomainEvent({
+        workspaceId: auth.workspaceId,
+        eventType: "invoice.paid",
+        aggregateType: "invoice",
+        aggregateId: invoice.id,
+        actorId: auth.userId,
+        payload: {
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          clientId: invoice.clientId,
+          totalCents: invoice.totalCents,
+          paidAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    return {
+      id: updated.id,
+      invoiceNumber: updated.invoiceNumber,
+      status: updated.status,
+      totalCents: updated.totalCents,
+      amountPaidCents: updated.amountPaidCents,
+    };
   });

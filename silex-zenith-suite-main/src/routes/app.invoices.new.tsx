@@ -36,10 +36,10 @@ function InvoiceBuilder() {
   const [currency, setCurrency] = useState<string>("USD");
   const [terms, setTerms] = useState<string>("Net-14");
   const [notes, setNotes] = useState<string>("Thank you for the trust. Payable via bank transfer or card link. Net-14 terms.");
+  const [discount, setDiscount] = useState<number>(0);
 
   const [items, setItems] = useState<Item[]>([
-    { id: "1", desc: "Q3 brand system refresh", qty: 42, rate: 185 },
-    { id: "2", desc: "Licensing bundle — team of 12", qty: 1, rate: 1200 },
+    { id: crypto.randomUUID(), desc: "", qty: 1, rate: 0 },
   ]);
 
   useEffect(() => {
@@ -67,9 +67,10 @@ function InvoiceBuilder() {
     setItems(items.map((i) => (i.id === id ? { ...i, ...patch } : i)));
   const removeItem = (id: string) => setItems(items.filter((i) => i.id !== id));
 
-  const subtotal = items.reduce((s, i) => s + i.qty * i.rate, 0);
+  const subtotal = items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.rate) || 0), 0);
   const tax = subtotal * 0.0875;
-  const total = subtotal + tax;
+  const discountNum = Math.max(0, Number(discount) || 0);
+  const total = Math.max(0, subtotal + tax - discountNum);
 
   const handleCreateInvoice = async () => {
     if (!selectedClientId) {
@@ -93,7 +94,7 @@ function InvoiceBuilder() {
         notes,
         terms,
         taxCents: Math.round(tax * 100),
-        discountCents: 0,
+        discountCents: Math.round(discountNum * 100),
         items: validItems.map((it) => ({
           description: it.desc.trim(),
           quantity: Number(it.qty) || 1,
@@ -276,6 +277,18 @@ function InvoiceBuilder() {
           {/* Totals */}
           <div className="mt-8 ml-auto max-w-xs space-y-2 text-[13.5px]">
             <Row label="Subtotal" value={subtotal} />
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span>Discount ($)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={discount === 0 ? "" : discount}
+                onChange={(e) => setDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
+                placeholder="0.00"
+                className="w-24 rounded-lg border border-border bg-background px-2 py-1 text-right text-xs tabular-nums outline-none focus:border-violet/60"
+              />
+            </div>
             <Row label="Tax (8.75%)" value={tax} muted />
             <div className="h-px bg-border" />
             <div className="flex justify-between font-medium text-lg font-display">

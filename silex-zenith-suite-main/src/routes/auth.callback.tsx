@@ -16,8 +16,26 @@ function AuthCallback() {
       try {
         const supabase = getSupabaseBrowserClient();
         const urlParams = new URLSearchParams(window.location.search);
+        const hash = window.location.hash.startsWith("#")
+          ? window.location.hash.substring(1)
+          : window.location.hash;
+        const hashParams = new URLSearchParams(hash);
+
+        // Check for error parameters in query or hash (e.g. user cancelled OAuth consent)
+        const callbackError =
+          urlParams.get("error_description") ||
+          urlParams.get("error") ||
+          hashParams.get("error_description") ||
+          hashParams.get("error");
+
+        if (callbackError) {
+          console.error("[SILEX Auth Callback Error]", callbackError);
+          setErrorMsg(callbackError);
+          return;
+        }
+
         const code = urlParams.get("code");
-        const nextRedirect = urlParams.get("redirect") || "/app";
+        const nextRedirect = urlParams.get("redirect") || hashParams.get("redirect") || "/app";
 
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -25,6 +43,21 @@ function AuthCallback() {
             console.error("[SILEX Auth Callback Error]", error);
             setErrorMsg(error.message);
             return;
+          }
+        } else {
+          // Handle hash-based token callbacks (implicit grant / email confirmation links)
+          const accessToken = hashParams.get("access_token");
+          const refreshToken = hashParams.get("refresh_token");
+          if (accessToken && refreshToken) {
+            const { error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (error) {
+              console.error("[SILEX Auth Callback Set Session Error]", error);
+              setErrorMsg(error.message);
+              return;
+            }
           }
         }
 

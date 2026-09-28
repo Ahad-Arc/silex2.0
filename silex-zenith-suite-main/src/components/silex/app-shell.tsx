@@ -1,8 +1,10 @@
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Users,
+  FolderKanban,
   FileText,
+  Files,
   CreditCard,
   BarChart3,
   Sparkles,
@@ -22,11 +24,14 @@ import { CommandMenu } from "./command-menu";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/supabase";
 import { getNotificationsFn } from "@/lib/server-functions/notifications";
+import { getWorkspaceSettingsFn } from "@/lib/server-functions/workspaces";
 import { useRealtimeNotifications } from "@/hooks/use-realtime-notifications";
 
 const NAV = [
   { to: "/app", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/app/clients", label: "Clients", icon: Users },
+  { to: "/app/projects", label: "Projects", icon: FolderKanban },
+  { to: "/app/documents", label: "Documents", icon: Files },
   { to: "/app/invoices", label: "Invoices", icon: FileText },
   { to: "/app/payments", label: "Payments", icon: CreditCard },
   { to: "/app/analytics", label: "Analytics", icon: BarChart3 },
@@ -40,9 +45,15 @@ const SECONDARY = [
 ];
 
 export function AppShell() {
+  const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [workspaceData, setWorkspaceData] = useState<{
+    name: string;
+    planTier: string;
+    logoUrl?: string | null;
+  } | null>(null);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   // Initial notification count fetch
@@ -57,6 +68,42 @@ export function AppShell() {
     }
     loadNotificationStats();
   }, [pathname]);
+
+  // Load active authenticated workspace info
+  useEffect(() => {
+    async function loadWorkspaceInfo() {
+      try {
+        const res = await getWorkspaceSettingsFn({});
+        if (res?.workspace) {
+          setWorkspaceData({
+            name: res.workspace.name,
+            planTier: res.workspace.planTier,
+            logoUrl: res.workspace.logoUrl,
+          });
+        }
+      } catch {
+        // Safe fallback for unauthenticated / initial loading
+      }
+    }
+    loadWorkspaceInfo();
+
+    const handleWorkspaceUpdate = (e: any) => {
+      if (e.detail?.name) {
+        setWorkspaceData((prev) => ({
+          name: e.detail.name,
+          planTier: e.detail.planTier || prev?.planTier || "free",
+          logoUrl: e.detail.logoUrl !== undefined ? e.detail.logoUrl : prev?.logoUrl || null,
+        }));
+      } else {
+        loadWorkspaceInfo();
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("silex_workspace_updated", handleWorkspaceUpdate);
+      return () => window.removeEventListener("silex_workspace_updated", handleWorkspaceUpdate);
+    }
+  }, []);
 
   // Attach Realtime WebSocket listener for live notification pushes
   useRealtimeNotifications({
@@ -76,6 +123,40 @@ export function AppShell() {
   const isActive = (to: string, exact?: boolean) =>
     exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
 
+  // Derive dynamic workspace attributes
+  const wsName = workspaceData?.name || "Workspace";
+  const wsInitials =
+    wsName
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) || "WS";
+
+  const userInitials = user?.user_metadata?.full_name
+    ? (user.user_metadata.full_name as string)
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : user?.email
+    ? user.email.slice(0, 2).toUpperCase()
+    : "U";
+
+  const rawTier = (workspaceData as any)?.planTier || (workspaceData as any)?.plan || "free";
+  const planLabel =
+    rawTier === "enterprise"
+      ? "Enterprise Plan"
+      : rawTier === "pro"
+      ? "Pro Plan"
+      : "Free Plan";
+
+
   return (
     <div className="min-h-screen w-full bg-background bg-grain">
       <div className="flex min-h-screen">
@@ -89,18 +170,22 @@ export function AppShell() {
 
           {/* Workspace switcher */}
           <div className="px-3">
-            <button className="group flex w-full items-center gap-2.5 rounded-xl border border-border/70 bg-card/60 px-2.5 py-2 text-left hover:border-violet/50 transition">
+            <Link
+              to="/app/settings"
+              search={{ tab: "workspace" }}
+              className="group flex w-full items-center gap-2.5 rounded-xl border border-border/70 bg-card/60 px-2.5 py-2 text-left hover:border-violet/50 transition"
+            >
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-primary to-violet text-primary-foreground text-[11px] font-semibold">
-                AS
+                {wsInitials}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-medium">Ariana Studio</span>
+                <span className="block truncate text-[13px] font-medium">{wsName}</span>
                 <span className="block truncate text-[11px] text-muted-foreground">
-                  Personal · Free trial
+                  {planLabel}
                 </span>
               </span>
               <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            </button>
+            </Link>
           </div>
 
           {/* Search / command */}
@@ -174,7 +259,10 @@ export function AppShell() {
               <li>
                 <button
                   type="button"
-                  onClick={() => signOut()}
+                  onClick={async () => {
+                    await signOut();
+                    navigate({ to: "/auth", replace: true });
+                  }}
                   className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground transition text-left"
                 >
                   <LogOut className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -184,21 +272,33 @@ export function AppShell() {
             </ul>
           </nav>
 
-          {/* Upgrade card */}
+          {/* Upgrade / Plan card */}
           <div className="p-3">
             <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-primary to-violet p-4 text-primary-foreground shadow-float">
               <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10 blur-2xl" />
               <div className="relative">
                 <div className="text-[11px] font-medium uppercase tracking-widest opacity-80">
-                  Upgrade
+                  {rawTier === "free" ? "Upgrade" : "Plan"}
                 </div>
-                <div className="mt-1 text-sm font-semibold">SILEX Studio</div>
+                <div className="mt-1 text-sm font-semibold">
+                  {rawTier === "enterprise"
+                    ? "Enterprise Scale"
+                    : rawTier === "pro"
+                    ? "SILEX Studio"
+                    : "SILEX Studio"}
+                </div>
                 <p className="mt-1 text-[11px] opacity-80 leading-relaxed">
-                  Unlimited invoices, AI insights, custom domains.
+                  {rawTier === "free"
+                    ? "Unlimited invoices, AI insights, custom domains."
+                    : "Unlimited invoices, AI insights, and workspace tools active."}
                 </p>
-                <button className="mt-3 w-full rounded-lg bg-white/15 backdrop-blur px-2.5 py-1.5 text-[11px] font-semibold hover:bg-white/25 transition">
-                  Upgrade — $19/mo
-                </button>
+                <Link
+                  to="/app/settings"
+                  search={{ tab: "billing" }}
+                  className="mt-3 block text-center w-full rounded-lg bg-white/15 backdrop-blur px-2.5 py-1.5 text-[11px] font-semibold hover:bg-white/25 transition"
+                >
+                  {rawTier === "free" ? "Upgrade — $19/mo" : "Manage Billing & Plans"}
+                </Link>
               </div>
             </div>
           </div>
@@ -252,7 +352,7 @@ export function AppShell() {
                 to="/app/profile"
                 className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-primary to-violet text-primary-foreground text-[12px] font-semibold hover:scale-105 transition"
               >
-                AV
+                {userInitials}
               </Link>
             </div>
           </header>

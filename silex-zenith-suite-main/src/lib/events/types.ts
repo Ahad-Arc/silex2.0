@@ -15,6 +15,8 @@ export const DOMAIN_EVENT_TYPES = [
   "invoice.paid",
   "payment.created",
   "comment.created",
+  "document.created",
+  "document.updated",
 ] as const;
 
 export type DomainEventType = (typeof DOMAIN_EVENT_TYPES)[number];
@@ -116,13 +118,28 @@ export const commentCreatedPayloadSchema = z.object({
   contentSnippet: z.string().max(200),
 });
 
+export const documentCreatedPayloadSchema = z.object({
+  documentId: z.string().min(1),
+  title: z.string().min(1),
+  folderId: z.string().nullable().optional(),
+  isTemplate: z.boolean().optional(),
+  createdBy: z.string().min(1),
+});
+
+export const documentUpdatedPayloadSchema = z.object({
+  documentId: z.string().min(1),
+  title: z.string().min(1),
+  folderId: z.string().nullable().optional(),
+  isTemplate: z.boolean().optional(),
+});
+
 /**
  * Domain Event Publish Parameters Contract
  */
 export interface PublishDomainEventParams {
   workspaceId: string;
   eventType: DomainEventType;
-  aggregateType: "client" | "project" | "task" | "invoice" | "payment" | "task_comment";
+  aggregateType: "client" | "project" | "task" | "invoice" | "payment" | "task_comment" | "document";
   aggregateId: string;
   actorId?: string | null;
   payload: Record<string, unknown>;

@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { ArrowRight, Mail, Lock, Github, Chrome, Loader2, User } from "lucide-react";
 import { SilexLogo } from "@/components/silex/logo";
@@ -13,6 +13,7 @@ export const Route = createFileRoute("/auth")({
 
 function Auth() {
   const navigate = useNavigate();
+  const search: Record<string, string> = useSearch({ strict: false }) || {};
   const { isAuthenticated, isLoading: isAuthChecking } = useAuth();
 
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -23,11 +24,8 @@ function Auth() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Parse redirect parameter if present
-  const searchParams = new URLSearchParams(
-    typeof window !== "undefined" ? window.location.search : "",
-  );
-  const redirectTarget = searchParams.get("redirect") || "/app";
+  // Parse redirect parameter if present (supports redirect or redirectTo)
+  const redirectTarget = search.redirect || search.redirectTo || "/app";
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -69,7 +67,11 @@ function Auth() {
           data: {
             full_name: fullName.trim() || email.split("@")[0],
           },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/callback${
+            redirectTarget && redirectTarget !== "/app"
+              ? `?redirect=${encodeURIComponent(redirectTarget)}`
+              : ""
+          }`,
         },
       });
 
@@ -91,7 +93,11 @@ function Auth() {
     setSuccessMsg(null);
 
     const supabase = getSupabaseBrowserClient();
-    const redirectUrl = `${window.location.origin}/auth/callback`;
+    const redirectUrl = `${window.location.origin}/auth/callback${
+      redirectTarget && redirectTarget !== "/app"
+        ? `?redirect=${encodeURIComponent(redirectTarget)}`
+        : ""
+    }`;
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider,

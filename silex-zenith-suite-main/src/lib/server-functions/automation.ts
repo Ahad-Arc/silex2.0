@@ -26,11 +26,6 @@ import { validateWebhookTargetUrl } from "@/lib/automation/webhooks";
 import { processOutboxBatchFn } from "@/lib/automation/processor";
 import { processWebhookDeliveryBatchFn } from "@/lib/automation/dispatcher";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: Automation server functions must NEVER be imported or executed in client browser environments."
-  );
-}
 
 /**
  * Utility: Generates a cryptographically secure 32-byte (64 hex char) webhook secret
@@ -1125,9 +1120,15 @@ export function verifyWorkerCronAuthorization(requestAuthHeader?: string | null)
   let authHeader = requestAuthHeader;
   if (!authHeader && typeof globalThis !== "undefined") {
     const g = globalThis as Record<string, unknown>;
-    if (typeof g.getRequestHeader === "function") {
-      authHeader = (g.getRequestHeader as (name: string) => string | undefined)("authorization") ||
-        (g.getRequestHeader as (name: string) => string | undefined)("Authorization");
+    const getHeader = (g.__silex_getRequestHeader || g.getRequestHeader) as
+      | ((name: string) => string | undefined)
+      | undefined;
+    if (typeof getHeader === "function") {
+      try {
+        authHeader = getHeader("authorization") || getHeader("Authorization");
+      } catch {
+        // Outside active Start server request context (e.g. CLI, tests)
+      }
     }
   }
 

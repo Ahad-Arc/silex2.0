@@ -7,11 +7,6 @@
 
 import { z } from "zod";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: Automation conditions module must NEVER be loaded in client browser environments."
-  );
-}
 
 /**
  * Allowlisted Condition Operators

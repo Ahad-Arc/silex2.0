@@ -322,7 +322,7 @@ The database is built on **PostgreSQL** (managed via Supabase) and defined stric
 - `workspace_id` (`uuid`, FK -> `workspaces.id` CASCADE, NOT NULL)
 - `user_id` (`uuid`, FK -> `users.id` CASCADE, NOT NULL)
 - `title` (`varchar(255)`, default `"New Conversation"`, NOT NULL)
-- `model_name` (`varchar(100)`, default `"gemini-2.5-flash"`, NOT NULL)
+- `model_name` (`varchar(100)`, default `"gemini-3.6-flash"`, NOT NULL)
 
 #### 28. `ai_messages`
 
@@ -365,5 +365,16 @@ The database is built on **PostgreSQL** (managed via Supabase) and defined stric
 - **37. `automation_runs`**: Execution log history for automation rules.
 - **38. `webhooks`**: Outbound HTTP webhook target configurations.
 - **39. `webhook_deliveries`**: Webhook delivery records tracking status (`pending` | `processing` | `delivered` | `failed`), claimed_at timestamp (`claimed_at`), retry count (`retry_count`), next scheduled retry timestamp (`next_retry_at`), HTTP status code, response body, execution duration, and error message. Indexed on queue processing (`status, next_retry_at`) and stale processing claims (`status, claimed_at WHERE status = 'processing'`).
-- **40. `api_keys`**: Workspace API keys with prefix, hashed token, and permission scopes.
+- **40. `api_keys`**: Workspace developer API keys.
+  - `id` (`uuid`, PK, RFC 9562 UUIDv7)
+  - `workspace_id` (`uuid`, FK -> `workspaces.id` CASCADE, NOT NULL)
+  - `name` (`varchar(100)`, NOT NULL)
+  - `key_prefix` (`varchar(10)`, NOT NULL, e.g. `"slx_live_"`)
+  - `key_hash` (`varchar(255)`, NOT NULL, unique index `idx_api_keys_hash` storing SHA-256 hex digest)
+  - `scopes` (`jsonb`, default `["*"]`, NOT NULL)
+  - `last_used_at` (`timestamp with tz`)
+  - `expires_at` (`timestamp with tz`)
+  - `created_by` (`uuid`, FK -> `users.id` RESTRICT, NOT NULL)
+  - `created_at` (`timestamp with tz`, NOT NULL)
+  - Indexes: unique index on `key_hash`, workspace index on `workspace_id` (`idx_api_keys_ws`).
 - **41. `idempotency_keys`**: Request idempotency protection table with expiration index.

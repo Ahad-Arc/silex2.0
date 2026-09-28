@@ -1,7 +1,8 @@
-import { createFileRoute, useSearch } from "@tanstack/react-router";
+import { createFileRoute, useSearch, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   User,
+  Users,
   Building2,
   Bell,
   Lock,
@@ -13,6 +14,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AutomationManager } from "@/components/silex/automation/automation-manager";
+import { WorkspaceTab } from "@/components/silex/settings/workspace-tab";
+import { BrandingTab } from "@/components/silex/settings/branding-tab";
+import { TeamTab } from "@/components/silex/settings/team-tab";
+import { NotificationsTab } from "@/components/silex/settings/notifications-tab";
+import { SecurityTab } from "@/components/silex/settings/security-tab";
+import { BillingTab } from "@/components/silex/settings/billing-tab";
 
 export const Route = createFileRoute("/app/settings")({
   head: () => ({
@@ -26,9 +33,10 @@ export const Route = createFileRoute("/app/settings")({
 
 const SECTIONS = [
   { id: "workspace", i: Building2, l: "Workspace" },
+  { id: "team", i: Users, l: "Team & members" },
+  { id: "branding", i: Palette, l: "Branding" },
   { id: "automation", i: Zap, l: "Automation & webhooks" },
   { id: "profile", i: User, l: "Profile" },
-  { id: "branding", i: Palette, l: "Branding" },
   { id: "notifications", i: Bell, l: "Notifications" },
   { id: "billing", i: CreditCard, l: "Plan & billing" },
   { id: "security", i: Lock, l: "Security" },
@@ -37,7 +45,22 @@ const SECTIONS = [
 
 function Settings() {
   const search: Record<string, string> = useSearch({ strict: false }) || {};
-  const initialTab = search.tab === "automation" || search.tab === "api" ? "automation" : "workspace";
+  const initialTab =
+    search.tab === "automation" || search.tab === "api"
+      ? "automation"
+      : search.tab === "team"
+      ? "team"
+      : search.tab === "branding"
+      ? "branding"
+      : search.tab === "notifications"
+      ? "notifications"
+      : search.tab === "profile"
+      ? "profile"
+      : search.tab === "security"
+      ? "security"
+      : search.tab === "billing"
+      ? "billing"
+      : "workspace";
   const initialSection = (search.section as any) || "rules";
 
   const [active, setActive] = useState(initialTab);
@@ -45,6 +68,16 @@ function Settings() {
   useEffect(() => {
     if (search.tab === "automation" || search.tab === "api") {
       setActive("automation");
+    } else if (search.tab === "team") {
+      setActive("team");
+    } else if (search.tab === "branding") {
+      setActive("branding");
+    } else if (search.tab === "workspace") {
+      setActive("workspace");
+    } else if (search.tab === "notifications") {
+      setActive("notifications");
+    } else if (search.tab && SECTIONS.some((s) => s.id === search.tab)) {
+      setActive(search.tab);
     }
   }, [search.tab]);
 
@@ -83,28 +116,36 @@ function Settings() {
           {active === "automation" || active === "api" ? (
             <AutomationManager initialSection={initialSection} />
           ) : active === "workspace" ? (
-            <Section title="Workspace" desc="How your workspace appears to teammates and clients.">
-              <Field label="Workspace name" defaultValue="Ariana Studio" />
-              <Field label="Workspace URL" prefix="silex.app/" defaultValue="ariana" />
-              <Field label="Support email" defaultValue="hello@ariana.studio" />
-              <ToggleRow
-                label="Public profile page"
-                desc="Allow prospects to view your studio page."
-                on
-              />
-              <ToggleRow
-                label="Show 'Powered by SILEX' badge"
-                desc="Enable on invoices and payment pages."
-              />
-            </Section>
+            <WorkspaceTab />
           ) : active === "branding" ? (
-            <Section title="Branding" desc="Make invoices and pages feel like you.">
-              <div className="grid gap-3 md:grid-cols-2">
-                <ColorField label="Primary color" value="#1E1B4B" />
-                <ColorField label="Accent color" value="#7C3AED" />
+            <BrandingTab />
+          ) : active === "team" ? (
+            <TeamTab />
+          ) : active === "notifications" ? (
+            <NotificationsTab />
+          ) : active === "profile" ? (
+            <Section
+              title="User Profile & Identity"
+              desc="Manage your public profile, headline, focus skills, and personal preferences."
+            >
+              <div className="space-y-4 py-2">
+                <p className="text-[13px] text-muted-foreground">
+                  Your public avatar, headline, bio, contact links, and personal workspace preferences are configured in your Profile hub.
+                </p>
+                <div className="pt-2">
+                  <Link
+                    to="/app/profile"
+                    className="inline-flex items-center gap-2 rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-[13px] font-medium shadow-float hover:bg-primary/90 transition"
+                  >
+                    <User className="h-4 w-4" /> Open Profile Page & Edit Settings →
+                  </Link>
+                </div>
               </div>
-              <Field label="Logo" defaultValue="ariana-logo.svg" />
             </Section>
+          ) : active === "security" ? (
+            <SecurityTab />
+          ) : active === "billing" ? (
+            <BillingTab />
           ) : active === "ai" ? (
             <Section
               title="SILEX AI"

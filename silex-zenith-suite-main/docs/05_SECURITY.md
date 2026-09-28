@@ -117,7 +117,7 @@
   ```
 - **Allowed Source Rules**: Ingestion is restricted to `documents`, `tasks`, and `client_notes`. System secrets, passwords, auth tokens, and raw credentials can never be indexed into `ai_memory`.
 - **Embedding Failure Safety**: If an embedding provider returns an error or dimension mismatch, the ingestion transaction fails safely. Storing fake zero/random/placeholder vectors is strictly prohibited.
-- **Embedding Standard & Model Lineage**: Native 1536-dimensional embeddings generated via `gemini-embedding-001` (`outputDimensionality: 1536`) stored in `extensions.vector(1536)`. Generation powered by `gemini-2.5-flash`. If an embedding model migration occurs with existing embeddings, vectors must be re-generated (current `ai_memory` row count is 0; retrieval threshold calibration remains pending live verification).
+- **Embedding Standard & Model Lineage**: Native 1536-dimensional embeddings generated via `gemini-embedding-001` (`outputDimensionality: 1536`) stored in `extensions.vector(1536)`. Generation powered by `gemini-3.6-flash`. If an embedding model migration occurs with existing embeddings, vectors must be re-generated (current `ai_memory` row count is 0; retrieval threshold calibration remains pending live verification).
 
 ### AI Zenith Query Engine & Production AI Boundary (`src/lib/server-functions/zenith.ts`)
 

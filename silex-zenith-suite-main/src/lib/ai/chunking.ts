@@ -7,11 +7,6 @@
 
 import { createHash } from "node:crypto";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: AI chunking utilities must NEVER be imported or executed in client browser environments."
-  );
-}
 
 export interface ChunkOptions {
   workspaceId: string;

@@ -9,14 +9,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { requireWorkspaceAccess } from "@/lib/auth/workspace";
+import { getServerAuthContext } from "@/lib/supabase/server-context";
 import { db } from "@/db";
-import { notifications, workspaceMembers } from "@/db/schema";
+import { notifications, notificationPreferences, workspaceMembers } from "@/db/schema";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: Notifications server functions must NEVER be imported or executed in client browser environments."
-  );
-}
 
 export const getNotificationsInputSchema = z.object({
   workspaceId: z.string().optional(),
@@ -245,5 +241,177 @@ export const createNotificationFn = createServerFn({ method: "POST" })
       isRead: createdRow.isRead,
       readAt: createdRow.readAt,
       createdAt: createdRow.createdAt,
+    };
+  });
+
+// ============================================================================
+// Notification Preferences Schemas & Server Functions
+// ============================================================================
+
+export const DEFAULT_NOTIFICATION_EVENT_TYPES: Record<string, boolean> = {
+  task_assigned: true,
+  invoice_paid: true,
+  client_created: true,
+  comment_added: true,
+  expense_recorded: true,
+  ai_insight: true,
+};
+
+export interface NotificationPreferencesItem {
+  id?: string;
+  userId: string;
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+  slackNotifications: boolean;
+  eventTypes: Record<string, boolean>;
+}
+
+export const getNotificationPreferencesInputSchema = z.object({
+  workspaceId: z.string().optional(),
+});
+
+/**
+ * Server Function: getNotificationPreferencesFn
+ * Retrieves user-scoped notification channel and event type preferences.
+ * Self-only query strictly derived from server authentication context.
+ */
+export const getNotificationPreferencesFn = createServerFn({ method: "GET" })
+  .validator((data?: unknown) => getNotificationPreferencesInputSchema.parse(data ?? {}))
+  .handler(async ({ data }): Promise<{ preferences: NotificationPreferencesItem }> => {
+    if (typeof window !== "undefined") {
+      throw new Error("[SILEX Security Guard] Execution prohibited in browser context.");
+    }
+
+    const auth = data?.workspaceId
+      ? await requireWorkspaceAccess({ workspaceId: data.workspaceId })
+      : await getServerAuthContext();
+
+    if (!db) {
+      throw new Error("DATABASE_ERROR: Database client is uninitialized.");
+    }
+
+    const [row] = await db
+      .select()
+      .from(notificationPreferences)
+      .where(eq(notificationPreferences.userId, auth.userId))
+      .limit(1);
+
+    if (!row) {
+      return {
+        preferences: {
+          userId: auth.userId,
+          emailNotifications: true,
+          pushNotifications: true,
+          slackNotifications: false,
+          eventTypes: { ...DEFAULT_NOTIFICATION_EVENT_TYPES },
+        },
+      };
+    }
+
+    return {
+      preferences: {
+        id: row.id,
+        userId: row.userId,
+        emailNotifications: row.emailNotifications,
+        pushNotifications: row.pushNotifications,
+        slackNotifications: row.slackNotifications,
+        eventTypes: {
+          ...DEFAULT_NOTIFICATION_EVENT_TYPES,
+          ...(row.eventTypes || {}),
+        },
+      },
+    };
+  });
+
+export const updateNotificationPreferencesInputSchema = z.object({
+  workspaceId: z.string().optional(),
+  emailNotifications: z.boolean().optional(),
+  pushNotifications: z.boolean().optional(),
+  slackNotifications: z.boolean().optional(),
+  eventTypes: z.record(z.string(), z.boolean()).optional(),
+});
+
+/**
+ * Server Function: updateNotificationPreferencesFn
+ * Validates and atomically upserts user notification delivery settings.
+ * Self-only mutation strictly derived from server authentication context.
+ */
+export const updateNotificationPreferencesFn = createServerFn({ method: "POST" })
+  .validator((data?: unknown) => updateNotificationPreferencesInputSchema.parse(data ?? {}))
+  .handler(async ({ data }): Promise<{ success: boolean; preferences: NotificationPreferencesItem }> => {
+    if (typeof window !== "undefined") {
+      throw new Error("[SILEX Security Guard] Execution prohibited in browser context.");
+    }
+
+    const auth = data?.workspaceId
+      ? await requireWorkspaceAccess({ workspaceId: data.workspaceId })
+      : await getServerAuthContext();
+
+    if (!db) {
+      throw new Error("DATABASE_ERROR: Database client is uninitialized.");
+    }
+
+    const [existingRow] = await db
+      .select()
+      .from(notificationPreferences)
+      .where(eq(notificationPreferences.userId, auth.userId))
+      .limit(1);
+
+    let savedRow: typeof notificationPreferences.$inferSelect;
+
+    if (existingRow) {
+      const mergedEventTypes = data.eventTypes !== undefined
+        ? {
+            ...DEFAULT_NOTIFICATION_EVENT_TYPES,
+            ...(existingRow.eventTypes || {}),
+            ...data.eventTypes,
+          }
+        : undefined;
+
+      const [updated] = await db
+        .update(notificationPreferences)
+        .set({
+          ...(data.emailNotifications !== undefined ? { emailNotifications: data.emailNotifications } : {}),
+          ...(data.pushNotifications !== undefined ? { pushNotifications: data.pushNotifications } : {}),
+          ...(data.slackNotifications !== undefined ? { slackNotifications: data.slackNotifications } : {}),
+          ...(mergedEventTypes !== undefined ? { eventTypes: mergedEventTypes } : {}),
+        })
+        .where(eq(notificationPreferences.userId, auth.userId))
+        .returning();
+
+      savedRow = updated;
+    } else {
+      const initialEventTypes = {
+        ...DEFAULT_NOTIFICATION_EVENT_TYPES,
+        ...(data.eventTypes || {}),
+      };
+
+      const [inserted] = await db
+        .insert(notificationPreferences)
+        .values({
+          userId: auth.userId,
+          emailNotifications: data.emailNotifications ?? true,
+          pushNotifications: data.pushNotifications ?? true,
+          slackNotifications: data.slackNotifications ?? false,
+          eventTypes: initialEventTypes,
+        })
+        .returning();
+
+      savedRow = inserted;
+    }
+
+    return {
+      success: true,
+      preferences: {
+        id: savedRow.id,
+        userId: savedRow.userId,
+        emailNotifications: savedRow.emailNotifications,
+        pushNotifications: savedRow.pushNotifications,
+        slackNotifications: savedRow.slackNotifications,
+        eventTypes: {
+          ...DEFAULT_NOTIFICATION_EVENT_TYPES,
+          ...(savedRow.eventTypes || {}),
+        },
+      },
     };
   });

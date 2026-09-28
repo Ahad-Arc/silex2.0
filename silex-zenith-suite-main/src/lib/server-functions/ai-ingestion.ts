@@ -20,11 +20,6 @@ import {
   computeContentHash,
 } from "@/lib/ai";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: AI ingestion server functions must NEVER be imported or executed in client browser environments."
-  );
-}
 
 // Validation Schemas
 export const indexDocumentInputSchema = z.object({

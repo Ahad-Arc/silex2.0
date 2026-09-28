@@ -14,21 +14,14 @@ import { aiConversations, aiMessages, aiMemory, aiToolCalls } from "@/db/schema"
 import { getAIConfig, getAIProvider, normalizeText } from "@/lib/ai";
 import { ZENITH_TOOLS, getToolDefinitionsPrompt } from "@/lib/ai/tools";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: Zenith AI query engine server functions must NEVER be imported or executed in client browser environments."
-  );
-}
-
 // Configured Input Validation Schema
-const config = getAIConfig();
 export const queryZenithInputSchema = z.object({
   workspaceId: z.string().optional(),
   conversationId: z.string().optional(),
   query: z
     .string()
     .min(1, "Query is required")
-    .max(config.maxQueryLength, `Query exceeds max length of ${config.maxQueryLength} characters`),
+    .max(2000, "Query exceeds max length of 2000 characters"),
 });
 
 export interface ZenithQueryResponse {

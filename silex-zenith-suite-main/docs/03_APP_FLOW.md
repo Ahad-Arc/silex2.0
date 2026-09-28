@@ -15,7 +15,8 @@ stateDiagram-v2
         [*] --> Overview: /app/index
         Overview --> Clients: /app/clients
         Overview --> Invoices: /app/invoices
-        Overview --> Projects: /app/projects (planned)
+        Overview --> Projects: /app/projects
+        Overview --> Documents: /app/documents (planned)
         Overview --> AI_Assistant: /app/ai & AI Dock
         Overview --> Analytics: /app/analytics
         Overview --> Notifications: /app/notifications
@@ -54,10 +55,13 @@ All `/app/*` routes are wrapped by `AppShell` (`src/components/silex/app-shell.t
 | `/app`               | `src/routes/app.index.tsx`         | **Main Workspace Dashboard**: KPI widgets (Revenue, Active Clients, Pending Tasks, Due Invoices), Recent Activity stream, Quick Actions.     |
 | `/app/clients`       | `src/routes/app.clients.tsx`       | **CRM Client Directory**: Searchable list of clients, status badges, filter drawer, and "Add Client" modal.                                  |
 | `/app/clients/$id`   | `src/routes/app.clients.$id.tsx`   | **Client Detail View**: Overview tab, contacts table, pinned client notes, active projects, and invoice history.                             |
+| `/app/projects`      | `src/routes/app.projects.tsx`      | **Projects Directory**: Workspace project list, 4 KPI statistic cards, status filters (All, Active, Planning, Completed, On Hold), search bar. |
+| `/app/projects/$id`  | `src/routes/app.projects.$id.tsx`  | **Project Detail & Kanban Board**: 4-column Kanban board (TODO, IN PROGRESS, IN REVIEW, COMPLETED), + Add Task modal, Task Detail drawer with inline edit, member assignees, comments timeline with live realtime sync, and soft delete. |
 | `/app/invoices`      | `src/routes/app.invoices.tsx`      | **Finance Invoices**: Invoice status filtering (Draft, Sent, Paid, Overdue), total revenue summary cards, invoice list.                      |
 | `/app/invoices/new`  | `src/routes/app.invoices.new.tsx`  | **Invoice Creator**: Dynamic multi-line item builder, automatic subtotal/tax/discount calculations, client selector, due date picker.        |
 | `/app/invoices/$id`  | `src/routes/app.invoices.$id.tsx`  | **Invoice Viewer**: Printable/exportable invoice template, record payment drawer, audit log history.                                         |
 | `/app/payments`      | `src/routes/app.payments.tsx`      | **Payment Ledger**: Real-time payment transactions, currency breakdowns, transaction reference lookups.                                      |
+| `/app/documents`     | `src/routes/app.documents.tsx`     | **Document Management**: Unified workspace documents and files explorer, lightweight storage provider, upload modal, filter/type tabs, folder hierarchy, rich JSON content docs, templates, and AI RAG knowledge integration. |
 | `/app/ai`            | `src/routes/app.ai.tsx`            | **AI Zenith Studio**: Dedicated full-page AI chat view, conversation history, model selector, RAG query inspector.                           |
 | `/app/analytics`     | `src/routes/app.analytics.tsx`     | **Analytics & Reporting**: Interactive Recharts graphs for monthly recurring revenue (MRR), task completion rates, client retention metrics. |
 | `/app/notifications` | `src/routes/app.notifications.tsx` | **Notification Center**: Real-time unread/read alert feed, filter by notification type, bulk "Mark all as read".                             |

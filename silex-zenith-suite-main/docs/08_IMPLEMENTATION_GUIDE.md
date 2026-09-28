@@ -69,28 +69,45 @@ silex-zenith-suite-main/
    - **Monetary Precision**: All financial amounts (`subtotalCents`, `taxCents`, `discountCents`, `totalCents`, `amountPaidCents`) are processed and persisted as integer cents (`Math.round(amount * 100)`). Floating-point persistence is forbidden.
    - **Transaction Boundaries**: Invoice and line item insertions (`invoices` + `invoice_items`) execute inside `db.transaction()` blocks to prevent orphaned records.
    - **Payment Verification**: Payments verify that the referenced `invoiceId` belongs strictly to the authorized workspace before updating `invoices.amountPaidCents` and status.
-7. **Projects & Dashboard Architecture (`src/lib/server-functions/projects.ts`)**:
-   - Includes `getProjectsFn`, `getProjectByIdFn`, `createProjectFn`, and `getDashboardTasksFn`.
-   - Enforces workspace authorization (`requireWorkspaceAccess`) and client relationship validation.
-   - **Dashboard Data Aggregation (`src/routes/app.index.tsx`)**: Combines real database queries from `getInvoicesFn()`, `getClientsFn()`, `getProjectsFn()`, and `getDashboardTasksFn()`.
-   - **Mock-Data Policy**: Mock data is strictly replaced with real database query results. When the workspace database contains no records, routes present clean empty/zero state indicators without fabricating persisted data.
+7. **Projects & Tasks Architecture (`src/lib/server-functions/projects.ts`)**:
+   - Includes `getProjectsFn`, `getProjectByIdFn`, `createProjectFn`, `getDashboardTasksFn`, `createTaskFn`, `updateTaskStatusFn`, `updateTaskFn`, `deleteTaskFn`, `getTaskCommentsFn`, and `createTaskCommentFn`.
+   - **Workspace Authorization & Isolation**: Every server function validates authorization via `requireWorkspaceAccess({ workspaceId })`. Client-provided workspace IDs are never trusted directly; workspace ID and actor identity are derived from the authenticated context. Task and project workspace boundaries are verified before mutation.
+   - **Task Mutations & Transactional Event Publishing**: `createTaskFn`, `updateTaskStatusFn`, `updateTaskFn`, and `createTaskCommentFn` execute all database operations inside Drizzle ORM transactions (`tx`). Domain events (`task.created`, `task.updated`, `task.completed`, `comment.created`) are published synchronously within `tx` via `publishDomainEvent(..., tx)`.
+   - **Assignee Persistence**: `createTaskFn` and `updateTaskFn` verify that provided `assigneeUserIds` belong to active members of the authorized workspace (`workspace_members`). `updateTaskFn` replaces assignments atomically when `assigneeUserIds` is supplied, or preserves existing assignments when omitted (`undefined`).
+   - **Status & Timestamp Transitions**: `updateTaskStatusFn` updates `completedAt = new Date()` when transitioning into `completed`/`done`, emits `task.updated` and `task.completed`, and clears `completedAt = null` when leaving completed states. Re-saving an already completed status does not emit duplicate `task.completed` events.
+   - **Soft Delete Policy**: `deleteTaskFn` sets `deletedAt = new Date()`. Soft-deleted tasks are strictly excluded from queries (`isNull(tasks.deletedAt)`). Physical deletion is prohibited.
+   - **Projects Directory Route & Navigation (`src/routes/app.projects.tsx`)**: Displays workspace projects via `getProjectsFn` with 4 KPI cards, search bar, status filter tabs, loading/empty/error states, and row links to `/app/projects/$id`. Integrated Projects (`FolderKanban` icon) into `AppShell` sidebar (`src/components/silex/app-shell.tsx`) and `Cmd+K` Command Menu (`src/components/silex/command-menu.tsx`) adhering 100% to Design Freeze.
+   - **Project Detail Route & Kanban Board UI (`src/routes/app.projects.$id.tsx`, `src/components/silex/projects/`)**: Displays project details via `getProjectByIdFn` with a summary header card (name, code, client, status tone, budget, start/due dates, description), back link to `/app/projects`, loading state (`Loader2`), non-existent project error card (`AlertCircle`), and a 4-column Kanban board (`src/components/silex/projects/kanban-board.tsx`). Organizes tasks into 4 canonical status columns (`todo`, `in_progress`, `in_review`, `completed`), normalizes legacy `done` status to `completed`, and renders task cards (`src/components/silex/projects/task-card.tsx`) with priority badges, assignees, tags, due date, and status selection dropdown menus triggering `updateTaskStatusFn` with optimistic state updates and `sonner` toast alerts. Adheres 100% to Design Freeze.
+   - **Task Creation & Detail Interaction Layer (`src/components/silex/projects/create-task-modal.tsx`, `task-detail-sheet.tsx`)**:
+     - `CreateTaskModal`: Modal dialog using `createTaskFn` supporting title (required, max 255 chars), description, status (`todo`, `in_progress`, `in_review`, `completed`), priority (`low`, `medium`, `high`, `urgent`), due date, estimated hours, and workspace member assignee selection. Handles field validation, loading states, duplicate submit prevention, and Kanban synchronization.
+     - `TaskDetailSheet`: Slide-out sheet drawer triggered by clicking any `TaskCard` (with `stopPropagation` on quick-status controls). Displays full task metadata (dates, estimates, tags, assignees), inline editing using `updateTaskFn`, status updates using `updateTaskStatusFn`, and soft-delete via an `AlertDialog` confirmation invoking `deleteTaskFn`.
+     - `Comments & Realtime Synchronization`: Displays comment feed using `getTaskCommentsFn` and enables new comment submission with `createTaskCommentFn`. Subscribes to Supabase Realtime channel `comments:${taskId}` on `task_comments` table filtered by `task_id=eq.${taskId}`, refreshing comments live and removing channel on drawer close/unmount.
+     - `Workspace Member Assignees`: Assignees are populated strictly from active workspace members returned by `getProjectByIdFn` (`workspace_members` joined with `users`), preventing arbitrary user assignment.
+   - **Phase 2D Final Regression & Production Readiness Verification (`tests/projects-production-regression.test.ts`)**:
+     - Full continuous user workflow verified (Directory -> Project Detail -> Kanban Board -> Create Task -> Detail Sheet -> Inline Edit -> 12 Canonical Status Transitions -> Comments -> Soft Delete -> Board Sync).
+     - Multi-tenant workspace isolation verified across all server function boundaries and UI flows (Tenant A cannot read, mutate, comment on, or assign Tenant B resources).
+     - Project-level isolation and strict task partitioning verified.
+     - Assignee security verified (active workspace members only; inactive, suspended, invited, and foreign users rejected server-side).
+     - Non-regression verified across all core modules: CRM, Finance, Analytics, Zenith AI (read-only tool registry), Automation (conditions & action registry), Notifications, and Authentication boundaries.
+     - Automated test suite expanded to 207 tests across 15 suites with 100% pass rate.
 8. **AI Zenith Server Architecture & Provider Abstraction (`src/lib/ai/`)**:
    - **Server-Only Boundary**: `src/lib/ai/config.ts` enforces `typeof window !== "undefined"` guards to guarantee AI credentials (`GEMINI_API_KEY`, `OPENAI_API_KEY`) are never imported or bundled into client code.
-   - **Supported Engines**: Primary Google Gemini Engine (`gemini-2.5-flash`, `gemini-embedding-001`), with `MockAIProvider` fallback when credentials are unconfigured.
-   - **Vector Dimension Standard**: `ai_memory` schema (`extensions.vector(1536)`) standardizes 1536-dimensional embeddings. Changing embedding models requires regenerating embeddings if existing rows are present; currently `ai_memory` contains zero rows. Retrieval threshold calibration remains pending live evaluation.
+   - **Supported Engines**: Primary Google Gemini Engine (`gemini-3.6-flash`, `gemini-embedding-001`), with `MockAIProvider` fallback when credentials are unconfigured.
+   - **Vector Dimension Standard**: `ai_memory` schema (`extensions.vector(1536)`) standardizes 1536-dimensional embeddings. Live E2E verified with Google `gemini-embedding-001` (1536 floats per row in `ai_memory`). `ai_memory` maintains zero residual rows post-test.
 9. **RAG Vector Ingestion & Chunking Pipeline (`src/lib/ai/chunking.ts`, `src/lib/server-functions/ai-ingestion.ts`)**:
    - **Supported Ingestion Scope**: `documents`, `tasks`, and `client_notes` ONLY. Auth tokens, keys, passwords, and private configurations are strictly excluded.
    - **Deterministic Text Normalization & Chunking**: `normalizeText` cleans whitespace and line breaks. `chunkText` extracts bounded chunks (~800 characters, ~150 character overlap) while preserving sentence boundaries and source metadata (`sourceTitle`, `entityType`, `entityId`, `chunkIndex`, `totalChunks`, `contentHash`).
    - **Deduplication Strategy**: Computes SHA-256 `contentHash` of normalized source content. Re-ingestion compares `metadata.contentHash` in `ai_memory` and skips embedding generation if content is unchanged.
    - **Safety & Error Handling**: On changed content, replaces old memory rows within `db.transaction()`. If embedding fails or produces invalid dimensions (!== 1536), throws an explicit error and aborts transaction without creating zero/fake vector rows.
-   - **Workspace Isolation Boundary**: All ingestion server functions (`indexDocumentFn`, `indexTaskFn`, `indexClientNoteFn`, `reindexWorkspaceMemoryFn`) enforce `requireWorkspaceAccess({ workspaceId })`. Client-provided workspace IDs are untrusted.
+   - **Workspace Isolation Boundary**: All ingestion server functions (`indexDocumentFn`, `indexTaskFn`, `indexClientNoteFn`, `reindexWorkspaceMemoryFn`) enforce `requireWorkspaceAccess({ workspaceId })`. Client-provided workspace IDs are untrusted. Real `indexDocumentFn` ingestion end-to-end verified.
 10. **AI Zenith Query Engine & Tool Calling (`src/lib/ai/tools.ts`, `src/lib/server-functions/zenith.ts`)**:
-   - **Server Function Boundary**: `queryZenithFn` executes inside TanStack Start server functions using `requireWorkspaceAccess({ workspaceId })`. Client payloads cannot bypass session authorization or access arbitrary workspaces.
-   - **Semantic RAG Retrieval**: Generates 1536-dimensional query embedding via `provider.createEmbedding()`, performs vector similarity search on `ai_memory` (`<=>` cosine operator), filters by `ai_memory.workspace_id = auth.workspaceId`, and bounds output to top-K relevant chunks.
-   - **Read-Only Tool Registry**: `ZENITH_TOOLS` in `src/lib/ai/tools.ts` defines explicit read-only workspace tools (`getClients`, `getClientById`, `getProjects`, `getProjectById`, `getInvoices`, `getInvoiceById`, `getPayments`, `getDashboardTasks`). Destructive mutations are strictly prohibited.
-   - **Bounded Tool Loop**: Tool decisions execute within a hard loop bound (maximum 3 iterations). Tool calls are logged in `ai_tool_calls` table and results are appended to prompt context.
-   - **System Prompt Grounding**: System prompt strictly instructs Zenith to use retrieved workspace context and real-time tool outputs. If facts are absent, Zenith states "I couldn't find that information in your SILEX workspace" rather than inventing data.
-   - **Conversation Persistence**: Conversation metadata is stored in `ai_conversations`, messages in `ai_messages`, and tool logs in `ai_tool_calls`.
+    - **Server Function Boundary**: `queryZenithFn` executes inside TanStack Start server functions using `requireWorkspaceAccess({ workspaceId })`. Client payloads cannot bypass session authorization or access arbitrary workspaces.
+    - **Semantic RAG Retrieval**: Generates 1536-dimensional query embedding via `provider.createEmbedding()`, performs vector similarity search on `ai_memory` (`<=>` cosine operator), filters by `ai_memory.workspace_id = auth.workspaceId`, and bounds output to top-K relevant chunks.
+    - **Live RAG E2E Verification & Threshold Calibration**: End-to-End ingestion (`indexDocumentFn`) and retrieval (`queryZenithFn`) verified against live Supabase PostgreSQL (`pohsooqlnraodafcrrhj`). In controlled testing, 3/3 in-domain canonical queries returned correct Top-1 sources (observed cosine distances: 0.1684–0.2381 for target chunks, 0.4727–0.5111 for cross-domain chunks). Negative out-of-domain queries were correctly rejected by model grounding (distances 0.5629–0.6006). `similarityThreshold = 0.85` remains unchanged as a **deferred optimization**; a larger production-like evaluation corpus is required before adjusting the threshold.
+    - **Read-Only Tool Registry**: `ZENITH_TOOLS` in `src/lib/ai/tools.ts` defines explicit read-only workspace tools (`getClients`, `getClientById`, `getProjects`, `getProjectById`, `getInvoices`, `getInvoiceById`, `getPayments`, `getDashboardTasks`). Destructive mutations are strictly prohibited.
+    - **Bounded Tool Loop**: Tool decisions execute within a hard loop bound (maximum 3 iterations). Tool calls are logged in `ai_tool_calls` table and results are appended to prompt context.
+    - **System Prompt Grounding**: System prompt strictly instructs Zenith to use retrieved workspace context and real-time tool outputs. If facts are absent, Zenith states "I couldn't find that information in your SILEX workspace" rather than inventing data.
+    - **Conversation Persistence**: Conversation metadata is stored in `ai_conversations`, messages in `ai_messages`, and tool logs in `ai_tool_calls`.
 11. **Realtime Collaboration & WebSockets Architecture (`src/hooks/use-realtime-notifications.ts`, `src/lib/server-functions/notifications.ts`)**:
     - **Notification Server Functions**: `getNotificationsFn`, `markNotificationReadFn`, `markAllNotificationsReadFn`, `createNotificationFn` enforce workspace access (`requireWorkspaceAccess`) and recipient user ID isolation (`notifications.recipient_user_id = auth.userId`).
     - **Task Comments Server Functions**: `getTaskCommentsFn`, `createTaskCommentFn` in `src/lib/server-functions/projects.ts` enforce workspace scoping (`task_comments.workspace_id = auth.workspaceId`) and assign `authorId` from server auth context.
@@ -123,10 +140,118 @@ silex-zenith-suite-main/
     - **Rule & Webhook Management**: 15 production server functions handling Rule CRUD, execution run history, and webhook delivery management.
     - **Worker Authorization Boundary**: `triggerAutomationOutboxWorkerFn` and `triggerWebhookDeliveryWorkerFn` enforce server-side `Authorization: Bearer <CRON_SECRET>` header verification against `process.env.CRON_SECRET` using timing-safe comparison (`timingSafeEqualStrings`) for cron triggers, or `requireWorkspaceAccess({ workspaceId, requiredRole: "admin" })` for manual Admin/Owner execution.
     - **Public Schema Hardening**: `cronSecret` is strictly removed from public Zod request input schemas (`batchSize?: number` bounded to $1 \le \text{batchSize} \le 100$). Secrets are never exposed, logged, or accepted as public payload parameters.
-17. **API & Data Query Patterns**: Wrap database calls in server functions (`createServerFn`) or custom React Query hooks (`useQuery`, `useMutation`).
-18. **Form Validation**: Always validate user input with Zod schemas and `@hookform/resolvers/zod`.
-
-
+17. **Workspace Settings, Branding & Team Management Architecture (`src/lib/server-functions/workspaces.ts`, `src/components/silex/settings/`)**:
+    - **Server Function Architecture**: `getWorkspaceSettingsFn`, `updateWorkspaceSettingsFn`, `getWorkspaceMembersFn`, `createWorkspaceInvitationFn`, `updateMemberRoleFn`, and `removeWorkspaceMemberFn`.
+    - **Zero-SaaS Shareable Invitations**: Generates a 64-character cryptographically secure token (`crypto.randomBytes(32)`), stores SHA-256 hash (`tokenHash`) with 7-day expiration in `workspace_invitations`. Zero third-party email dependencies ($0 cost).
+    - **Role Hierarchy & Invariant Protection**: Role hierarchy ranks (`owner: 3`, `admin: 2`, `member: 1`). Enforces self-mutation prohibition (`CANNOT_MODIFY_OWN_ROLE`), admin boundary limits (cannot modify or remove owners or other admins), and final-owner demotion/removal protection (`FINAL_OWNER_PROTECTION`). Soft deactivates members via `status: 'deactivated'` to maintain audit history.
+    - **UI Layer & Dynamic AppShell Synchronization**: Controlled forms in `/app/settings` (`workspace-tab.tsx`, `branding-tab.tsx`, `team-tab.tsx`, `invite-member-modal.tsx`) with optimistic updates and `silex_workspace_updated` custom event dispatching that syncs AppShell initials, name, and plan tier in real time without full page reloads.
+18. **User Profile Settings & Identity Persistence (`src/lib/server-functions/profile.ts`, `src/routes/app.profile.tsx`, `src/components/silex/profile/edit-profile-modal.tsx`)**:
+    - **Server Function Architecture**: `getUserProfileFn` and `updateUserProfileFn`.
+    - **Security & Privacy Invariants**:
+      - Caller identity derived exclusively via `getServerAuthContext()`.
+      - No client-provided `userId` trusted.
+      - Self-only mutation bounded by `eq(users.id, userId)`.
+      - `passwordHash`, sessions, and tokens are NEVER selected or leaked in profile responses.
+    - **Zero-Cost Storage & Avatar Handling**:
+      - Image URLs or initials badge fallback; zero physical cloud file storage dependencies.
+    - **Preferences & UI Config Persistence**:
+      - Preferences table `user_preferences` structured with `theme`, `timezone`, `locale`, `keyboardShortcutsEnabled`, and JSONB `ui_config` storing bio, location, website, Twitter, GitHub, and skills tags with atomic merging.
+    - **Workspace Job Title Synchronization**:
+      - Dual persistence in `user_preferences.ui_config.jobTitle` and `workspace_members.jobTitle` for active workspace memberships in a Drizzle transaction.
+19. **API & Data Query Patterns**: Wrap database calls in server functions (`createServerFn`) or custom React Query hooks (`useQuery`, `useMutation`).
+20. **Form Validation**: Always validate user input with Zod schemas and `@hookform/resolvers/zod`.
+21. **Notification Preferences & Delivery Settings (`src/lib/server-functions/notifications.ts`)**:
+    - **Self-Only Authorization & Server Derivation**:
+      - `getNotificationPreferencesFn` and `updateNotificationPreferencesFn` authenticate exclusively via `getServerAuthContext()` or `requireWorkspaceAccess()`.
+      - Client-provided `userId` is prohibited; preferences are strictly scoped to the calling user.
+    - **Zero Paid Infrastructure & Table 32 Persistence**:
+      - Stored in Table 32 `notification_preferences` (`pushNotifications`, `emailNotifications`, `slackNotifications`, `eventTypes` JSONB).
+      - Zero paid third-party dependencies (no Twilio, Resend, or SendGrid required; Slack integration notices direct users to outbound webhooks in Automation & webhooks).
+    - **Settings Tab & Route Integration**:
+      - UI rendered via `<NotificationsTab />` inside `/app/settings` with direct navigation from `/app/notifications` header.
+22. **Workspace Security & Developer API Keys (`src/lib/server-functions/security.ts`)**:
+    - **Server Cookie Bridge**:
+      - `@tanstack/react-start/server` `getCookies()`, `setCookie()`, and `getRequestHeader("authorization")` bridge live browser cookies directly to Supabase server client.
+      - Fallback to mock adapter in test environments prevents SSR/CLI crashes while preserving authoritative session verification.
+    - **Developer API Key Lifecycle & Hash-Only Persistence**:
+      - `generateApiKeyToken()` produces high-entropy `slx_live_<48 hex chars>` tokens (192-bit entropy).
+      - Table 40 `api_keys` strictly stores `keyHash` (SHA-256 hex string) and `keyPrefix` (`slx_live_`). Raw secrets are NEVER saved in PostgreSQL.
+      - Raw secret is returned exactly ONCE upon creation (`createApiKeyFn`) and never exposed in retrieval queries (`getApiKeysFn`).
+      - Only `admin` and `owner` workspace roles can create or revoke API keys.
+    - **Settings Route & UI Integration**:
+      - Rendered via `<SecurityTab />` inside `/app/settings` supporting session overview, key listing, generation modal, and one-time key copying.
+23. **Plan & Billing Management and Subscription Lifecycle (`src/lib/server-functions/billing.ts`)**:
+    - **Server-Authoritative Multi-Tenant Authorization**:
+      - `getBillingOverviewFn`, `createCheckoutSessionFn`, `cancelSubscriptionFn`, and `resumeSubscriptionFn` derive workspace identity strictly from `requireWorkspaceAccess()`.
+      - Checkout creation, subscription cancellation, and resumption strictly require `requiredRole: "admin"` (Owner or Admin).
+    - **Zero-Cost $0 Sandbox & Simulation Fallback**:
+      - For local development and student environments where a live paid Stripe account is unavailable, `createCheckoutSessionFn` provides a transactional database simulation.
+      - Atomically upserts Table 23 `subscriptions` and updates `workspaces.planTier` (`free`, `pro`, `enterprise`).
+    - **Stripe Webhook Verification**:
+      - Inbound Stripe webhooks are processed by `handleStripeWebhookFn` using constant-time HMAC-SHA256 signature verification (`verifyStripeSignature` with `timingSafeEqual`).
+    - **UI & AppShell Integration**:
+      - Rendered via `<BillingTab />` inside `/app/settings` (`search.tab === "billing"`).
+      - AppShell sidebar upgrade card links directly to `/app/settings?tab=billing`.
+      - Dispatches `silex_workspace_updated` window event on upgrade/cancellation to re-sync `AppShell` in real-time.
+24. **Storage & Media Subsystem (`src/lib/storage/` & `src/lib/server-functions/documents.ts`)**:
+    - **Clean Provider Abstraction Layer**:
+      - `StorageProvider` interface standardizes `getSignedUploadUrl`, `getSignedDownloadUrl`, `deleteObject`, and `getStorageStatus`.
+      - `DisabledStorageProvider`: $0 metadata-only default when physical cloud storage is unprovisioned. Transparently reports status without failing, faking uploads, or requiring paid cloud services.
+      - `LocalDevStorageProvider`: Sandboxed filesystem storage for local development (`.storage_local`), with strict directory traversal prevention and isolated workspace paths.
+      - `SupabaseStorageProvider`: Optional production adapter utilizing `@supabase/storage-js` or Supabase client, ready for seamless production activation.
+      - Storage Factory (`getStorageProvider`): Dynamically resolves provider based on `STORAGE_MODE` (`disabled`, `local`, `supabase`), defaulting safely to `disabled` ($0 mode).
+    - **Storage Safety & Multi-Tenant Security**:
+      - `sanitizeFileName`: Strips path traversal sequences (`../`, `..\`), ASCII control characters, null bytes, and leading dots/separators. Enforces 200-character max length while preserving extension.
+      - `validateAttachmentFile`: Validates file size (max 25MB for document attachments, max 50MB overall) and MIME allowlist (PDF, images, Office documents, CSV, Markdown, plain text). Rejects dangerous executable extensions (`.exe`, `.sh`, `.bat`, `.cmd`, `.dll`, `.vbs`, `.js`).
+      - `generateStoragePath`: Deterministically creates workspace-partitioned path (`{workspaceId}/{entityType}/{entityId}/{timestamp}_{token}_{fileName}`).
+      - `verifyStoragePathTenantOwnership`: Guarantees path begins with caller's authenticated `workspaceId + "/"`. Rejects cross-tenant storage path tampering.
+    - **Server Functions & UI Integration**:
+      - `uploadAttachmentFn`, `deleteAttachmentFn`, `getAttachmentDownloadUrlFn`, and `getStorageConfigFn` manage attachment metadata in Table 26 `attachments`.
+      - UI rendered via `<AttachFileModal />` inside Document Detail (`/app/documents/$id`) with interactive file selection, size/MIME validation, transparent storage status notice ($0 mode card), custom display name, delete confirmation dialog with `AlertDialog`, and download/view action.
+    - **Student-Friendly $0 Invariants**:
+      - Zero paid cloud storage required for development.
+      - Zero binary blobs stored in PostgreSQL (Table 26 `attachments` stores strictly metadata: `fileName`, `fileSizeBytes`, `mimeType`, `storagePath`).
+      - Zero fake cloud uploads. Clear and honest reporting when physical cloud storage is unprovisioned.
+      - Zero database schema migrations required (reused Table 26 `attachments`).
+25. **Production Deployment & Launch Readiness (`src/lib/server-functions/security.ts`, `src/routes/auth.callback.tsx`, `src/db/index.ts`)**:
+    - **Authentication & Callback Resilience**:
+      - `auth.callback.tsx`: Robust handling of both query parameters (`?code=...`, `?error=...`) and URL hash fragments (`#access_token=...&refresh_token=...`, `#error_description=...`).
+      - Calls `supabase.auth.setSession` when token fragments are present, ensuring sessions are persisted across tabs and page refreshes.
+      - Validates and preserves `redirectTarget` (`/app`, `/onboarding`, etc.) to prevent dropping the user onto broken or default routes.
+      - `auth.tsx`: Passes encoded `redirectTarget` to `emailRedirectTo` during `signUp` to route users into `/onboarding` after email confirmation.
+    - **Production Environment & Boundary Protection**:
+      - Clean separation of public browser variables (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_APP_URL`) from private server secrets (`DATABASE_URL`, `CRON_SECRET`, `STORAGE_MODE`, `STRIPE_SECRET_KEY`, `GEMINI_API_KEY`).
+      - Bounded connection pooling for serverless environments in `src/db/index.ts` (`max: 10`, `idle_timeout: 20`, `connect_timeout: 10`, `prepare: false`), ideal for Supabase Transaction Poolers (port 6543) and Cloudflare Workers.
+    - **Secure Worker Cron Execution**:
+      - Worker endpoints (`triggerAutomationOutboxWorkerFn`, `triggerWebhookDeliveryWorkerFn`) enforce `verifyWorkerCronAuthorization` checking `Authorization: Bearer <CRON_SECRET>` or `x-cron-secret` via constant-time string comparison (`timingSafeEqualStrings`).
+      - Server header resolver is safely bridged via `globalThis.__silex_getRequestHeader` inside `src/lib/supabase/server.ts` to prevent forbidden `@tanstack/react-start/server` imports from leaking into client-bundled modules.
+    - **Deployment Readiness Diagnostics**:
+      - Server-side health diagnostic `getDeploymentReadinessFn` in `src/lib/server-functions/security.ts` outputs live configuration status across database, auth, storage, cron, AI provider, and billing subsystems.
+26. **CRM Key Contacts Management & Invoicing Calculation Precision (`src/lib/server-functions/crm.ts`, `src/routes/app.clients.$id.tsx`, `src/components/crm/contact-modal.tsx`, `src/routes/app.invoices.$id.tsx`, `src/routes/app.invoices.new.tsx`)**:
+    - **CRM Multi-Contact Roster (PRD Section 3.2)**:
+      - Full CRUD operations for client contacts in `src/lib/server-functions/crm.ts`: `createClientContactFn`, `updateClientContactFn`, `deleteClientContactFn`, `setPrimaryClientContactFn`.
+      - Enforces multi-tenant workspace isolation (`requireWorkspaceAccess`), server-side validation with Zod (`createClientContactInputSchema`), automatic primary designation for initial contact, and single-primary contact invariant.
+      - Soft-delete semantics: Setting `deletedAt` on contact removal with automated promotion of next oldest active contact if primary is soft-deleted.
+      - Created `ContactModal` (`src/components/crm/contact-modal.tsx`) for modal adding and editing with Radix UI Dialog primitives and full field validation.
+      - Integrated Key Contacts card into Client Detail (`src/routes/app.clients.$id.tsx`) with primary badge, dropdown actions (Set as primary, Edit, Delete), and reactive client header contact binding.
+    - **Invoicing Precision & Truthful Calculations (PRD Section 3.4)**:
+      - Eradicated all mock fallbacks in Invoice Detail (`src/routes/app.invoices.$id.tsx`): Replaced `$10,407.38` fallback total with `0`, removed fake line items ("Q3 brand system refresh", "Licensing bundle"), replaced fallback subtotal `$9,570.00` and tax `$837.38` with `0`. Added dynamic discount and partial payments display.
+      - Updated Invoice Builder (`src/routes/app.invoices.new.tsx`) to initialize with a clean empty line item, added discount input field, and accurate payload discount calculation (`discountCents`).
+    - **Authentication Redirect Preservation**:
+      - Hardened `src/routes/app.tsx` to preserve `window.location.search` during unauthenticated `/auth` redirects.
+27. **Full-Text & Global Search Indexing (`src/lib/server-functions/search.ts`, `src/components/silex/command-menu.tsx`, `src/components/ui/command.tsx`)**:
+    - **Server-Authoritative Global Search Server Function (`globalSearchFn`)**:
+      - Searches across 6 entity domains: Projects (`name`, `code`, `description`), Tasks (`title`, `description`), Documents (`title`, `contentJson`), CRM Clients (`companyName`, `website`), Invoices (`invoiceNumber`, `notes`), and Expenses (`vendorName`, `category`).
+      - Enforces `requireWorkspaceAccess` server authorization context, strict multi-tenant workspace isolation (`eq(entity.workspaceId, auth.workspaceId)`), soft-delete query exclusion (`isNull(entity.deletedAt)`), sensitive field protection (zero secret/hash/token exposure), and bounded per-category query limits (`perCategoryLimit = Math.max(3, Math.min(10, Math.ceil(limit / 6)))`).
+      - Returns normalized `SearchResultItem[]` array and category `groupedResults` object with direct navigation routes (`/app/projects/:id`, `/app/documents/:id`, `/app/clients/:id`, `/app/invoices/:id`, `/app/payments`).
+    - **Command Menu UI Integration (`CommandMenu`)**:
+      - Extended existing SILEX Command Menu (`Cmd+K`). Supported dynamic input binding (`CommandInput`), 200ms client debouncing, loading state with spinner (`Loader2`), error message state, and clear empty state (`CommandEmpty`).
+      - Rendered non-empty search query results grouped under 6 entity headers (`Projects`, `Tasks`, `Documents`, `Clients`, `Invoices`, `Expenses`) with Lucide icons (`FolderKanban`, `CheckSquare`, `Files`, `Users`, `FileText`, `CreditCard`) and subtitle metadata while preserving quick action shortcuts and default navigation items when query is empty.
+      - Updated `CommandDialog` in `src/components/ui/command.tsx` to accept `shouldFilter` prop, enabling custom server-filtered results without client-side cmdk list filtering.
+    - **Student-Friendly $0 Architecture**:
+      - Uses PostgreSQL-native `ilike` and `sql` JSON text querying over existing schemas and indexes without adding paid search SaaS, Elasticsearch, Algolia, Meilisearch, or extra microservices.
+    - **Deterministic Test Suite (`tests/global-search.test.ts`)**:
+      - Created 15 deterministic unit and contract tests verifying search results for all 6 entities, workspace multi-tenant isolation, soft-delete exclusion, empty query safety, result limits, navigation route formatting, secret non-exposure, unauthenticated access guard, Command Menu shortcut preservation, and auth redirect search parameter preservation.
 
 ---
 

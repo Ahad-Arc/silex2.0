@@ -25,7 +25,7 @@ import {
 
 describe("M5.6 AUTOMATION UI CONTRACT & SECURITY TESTS", () => {
   it("1. CANONICAL DOMAIN EVENT REGISTRY — Directly Consumes DOMAIN_EVENT_TYPES", () => {
-    assert.equal(DOMAIN_EVENT_TYPES.length, 11);
+    assert.equal(DOMAIN_EVENT_TYPES.length, 13);
     assert.ok(DOMAIN_EVENT_TYPES.includes("invoice.paid"));
     assert.ok(DOMAIN_EVENT_TYPES.includes("payment.created"));
     assert.ok(DOMAIN_EVENT_TYPES.includes("client.created"));
@@ -37,6 +37,8 @@ describe("M5.6 AUTOMATION UI CONTRACT & SECURITY TESTS", () => {
     assert.ok(DOMAIN_EVENT_TYPES.includes("task.completed"));
     assert.ok(DOMAIN_EVENT_TYPES.includes("invoice.created"));
     assert.ok(DOMAIN_EVENT_TYPES.includes("comment.created"));
+    assert.ok(DOMAIN_EVENT_TYPES.includes("document.created"));
+    assert.ok(DOMAIN_EVENT_TYPES.includes("document.updated"));
   });
 
   it("2. RULE CREATE SCHEMA — Validates Canonical Event & Allowlisted Actions", () => {

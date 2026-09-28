@@ -5,11 +5,6 @@
  * exponential backoff calculation, and bounded response body formatting.
  */
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: Webhook security helpers must NEVER be loaded in client browser environments."
-  );
-}
 
 /**
  * Result contract for URL validation

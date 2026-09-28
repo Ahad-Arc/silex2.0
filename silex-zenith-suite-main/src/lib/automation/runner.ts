@@ -21,11 +21,6 @@ import {
 } from "./actions";
 import type { OutboxEventRecord } from "@/lib/events/types";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: Workflow runner must NEVER be executed in browser environments."
-  );
-}
 
 /**
  * Result contract for workflow execution per outbox event

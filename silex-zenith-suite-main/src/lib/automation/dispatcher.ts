@@ -18,11 +18,6 @@ import {
   getUtf8ByteLength,
 } from "./webhooks";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: Webhook delivery dispatcher must NEVER be executed in browser environments."
-  );
-}
 
 /**
  * Persisted Webhook Delivery Model Interface

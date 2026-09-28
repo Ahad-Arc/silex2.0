@@ -37,7 +37,7 @@ export const aiConversations = pgTable(
       .references(() => users.id, { onDelete: "cascade" })
       .notNull(),
     title: varchar("title", { length: 255 }).default("New Conversation").notNull(),
-    modelName: varchar("model_name", { length: 100 }).default("gemini-2.5-flash").notNull(),
+    modelName: varchar("model_name", { length: 100 }).default("gemini-3.6-flash").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),

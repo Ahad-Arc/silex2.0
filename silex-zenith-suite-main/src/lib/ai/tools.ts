@@ -9,12 +9,7 @@ import { z } from "zod";
 import { getClientsFn, getClientByIdFn } from "@/lib/server-functions/crm";
 import { getInvoicesFn, getInvoiceByIdFn, getPaymentsFn } from "@/lib/server-functions/invoices";
 import { getProjectsFn, getProjectByIdFn, getDashboardTasksFn } from "@/lib/server-functions/projects";
-
-if (typeof window !== "undefined") {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: AI tools must NEVER be imported or executed in client browser environments."
-  );
-}
+import { getDocumentsFn, getDocumentByIdFn } from "@/lib/server-functions/documents";
 
 export interface ZenithToolDefinition {
   name: string;
@@ -110,6 +105,42 @@ export const ZENITH_TOOLS: Record<string, ZenithToolDefinition> = {
     }),
     execute: async (workspaceId, args) => {
       return getDashboardTasksFn({ data: { workspaceId, limit: args.limit } });
+    },
+  },
+
+  getDocuments: {
+    name: "getDocuments",
+    description: "Retrieve workspace documents and templates, with optional search query, folder filter, or template filter.",
+    parameters: z.object({
+      search: z.string().optional().describe("Optional search query to filter documents by title"),
+      folderId: z.string().uuid().optional().describe("Optional folder UUID to filter documents"),
+      isTemplate: z.boolean().optional().describe("Optional boolean filter for templates"),
+    }),
+    execute: async (workspaceId, args) => {
+      return getDocumentsFn({
+        data: {
+          workspaceId,
+          search: args.search,
+          folderId: args.folderId,
+          isTemplate: args.isTemplate,
+        },
+      });
+    },
+  },
+
+  getDocumentDetails: {
+    name: "getDocumentDetails",
+    description: "Retrieve comprehensive document content, metadata, and attachments by document ID.",
+    parameters: z.object({
+      documentId: z.string().uuid().describe("The unique UUID of the document"),
+    }),
+    execute: async (workspaceId, args) => {
+      return getDocumentByIdFn({
+        data: {
+          workspaceId,
+          documentId: args.documentId,
+        },
+      });
     },
   },
 };

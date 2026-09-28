@@ -23,82 +23,6 @@ export const Route = createFileRoute("/app/clients")({
   component: Clients,
 });
 
-// Fallback Mock Clients for initial preview when database is unpopulated
-const MOCK_CLIENTS = [
-  {
-    id: "acme-studio",
-    n: "Acme Studio",
-    contact: "Ellie Wu",
-    email: "ellie@acme.co",
-    rev: 42400,
-    invoices: 8,
-    status: "Active",
-    tone: "success",
-    g: 34,
-    since: "Jan 2024",
-  },
-  {
-    id: "nova-labs",
-    n: "Nova Labs",
-    contact: "Diego Santos",
-    email: "diego@novalabs.dev",
-    rev: 28200,
-    invoices: 6,
-    status: "Overdue",
-    tone: "destructive",
-    g: 12,
-    since: "Mar 2024",
-  },
-  {
-    id: "foundry-type",
-    n: "Foundry Type",
-    contact: "Jordan Reyes",
-    email: "jr@foundrytype.co",
-    rev: 18400,
-    invoices: 4,
-    status: "Active",
-    tone: "success",
-    g: -6,
-    since: "Jun 2024",
-  },
-  {
-    id: "riverside-media",
-    n: "Riverside Media",
-    contact: "Priya Shah",
-    email: "priya@riverside.tv",
-    rev: 12200,
-    invoices: 3,
-    status: "New",
-    tone: "violet",
-    g: 22,
-    since: "Sep 2025",
-  },
-  {
-    id: "kite-club",
-    n: "Kite Club",
-    contact: "Sam Ito",
-    email: "sam@kite.club",
-    rev: 8600,
-    invoices: 2,
-    status: "Active",
-    tone: "success",
-    g: 4,
-    since: "Apr 2025",
-  },
-  {
-    id: "orbit-house",
-    n: "Orbit House",
-    contact: "Ren Park",
-    email: "ren@orbit.house",
-    rev: 6200,
-    invoices: 2,
-    status: "Paused",
-    tone: "muted",
-    g: 0,
-    since: "Feb 2025",
-  },
-];
-
 const toneMap: Record<string, string> = {
   success: "bg-success/10 text-success",
   destructive: "bg-destructive/10 text-destructive",
@@ -125,7 +49,7 @@ interface ClientItem {
 }
 
 function Clients() {
-  const [clientsList, setClientsList] = useState<ClientItem[]>(MOCK_CLIENTS);
+  const [clientsList, setClientsList] = useState<ClientItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -151,21 +75,20 @@ function Clients() {
           n: c.companyName,
           contact: c.primaryContact?.name || "Unassigned",
           email: c.primaryContact?.email || "No email",
-          rev: 0,
-          invoices: 0,
+          rev: Math.round(((c as any).totalInvoicedCents || 0) / 100),
+          invoices: (c as any).invoicesCount || 0,
           status: c.status || "Active",
           tone: c.status === "Overdue" ? "destructive" : c.status === "Lead" ? "violet" : "success",
           g: 0,
           since: new Date(c.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
           isReal: true,
         }));
-        setClientsList([...mapped, ...MOCK_CLIENTS]);
+        setClientsList(mapped);
       } else {
-        setClientsList(MOCK_CLIENTS);
+        setClientsList([]);
       }
     } catch {
-      // If server function returns unauthenticated or offline, fallback cleanly to mock
-      setClientsList(MOCK_CLIENTS);
+      setClientsList([]);
     } finally {
       setIsLoading(false);
     }
@@ -243,10 +166,10 @@ function Clients() {
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         {[
-          { l: "Active", v: `${clientsList.length}`, d: "clients total" },
-          { l: "Lifetime revenue", v: "$284k", d: "+18% YoY" },
-          { l: "Avg. deal size", v: "$4.2k", d: "per invoice" },
-          { l: "Retention", v: "94%", d: "12mo rolling" },
+          { l: "Active", v: `${clientsList.filter((c) => c.status === "Active").length}`, d: "active clients" },
+          { l: "Total Clients", v: `${clientsList.length}`, d: "in workspace" },
+          { l: "Leads", v: `${clientsList.filter((c) => c.status === "Lead").length}`, d: "sales pipeline" },
+          { l: "Pending Action", v: `${clientsList.filter((c) => c.status === "Overdue" || c.status === "Paused").length}`, d: "overdue or paused" },
         ].map((s) => (
           <div key={s.l} className="rounded-2xl border border-border/70 bg-card/70 p-5 hover-lift">
             <div className="text-[12px] uppercase tracking-widest text-muted-foreground">{s.l}</div>
@@ -304,7 +227,9 @@ function Clients() {
             </div>
           ) : filteredClients.length === 0 ? (
             <div className="py-12 text-center text-muted-foreground text-[13px]">
-              No clients found matching your filter.
+              {clientsList.length === 0
+                ? "No clients in this workspace yet. Click \"Add client\" to create your first client."
+                : "No clients found matching your filter."}
             </div>
           ) : (
             filteredClients.map((c) => (
@@ -325,11 +250,6 @@ function Clients() {
                   <div className="min-w-0">
                     <div className="truncate text-[14px] font-medium flex items-center gap-1.5">
                       {c.n}
-                      {c.isReal && (
-                        <span className="rounded bg-violet/20 px-1 py-0.2 text-[9px] text-violet font-semibold uppercase">
-                          DB
-                        </span>
-                      )}
                     </div>
                     <div className="truncate text-[11px] text-muted-foreground">
                       Since {c.since}

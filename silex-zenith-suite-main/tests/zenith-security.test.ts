@@ -250,9 +250,9 @@ test("18. CONVERSATION MESSAGE TIMELINE OWNERSHIP BOUNDARY", async () => {
   assert.equal(sanitizedTimeline[0].content, "Hello");
 });
 
-test("19. GENERATION MODEL RESOLUTION — Default resolves to gemini-2.5-flash", async () => {
+test("19. GENERATION MODEL RESOLUTION — Default resolves to gemini-3.6-flash", async () => {
   const config = getAIConfig();
-  assert.equal(config.model, "gemini-2.5-flash", "Default generation model must resolve to gemini-2.5-flash");
+  assert.equal(config.model, "gemini-3.6-flash", "Default generation model must resolve to gemini-3.6-flash");
 });
 
 test("20. EMBEDDING MODEL RESOLUTION — Default resolves to gemini-embedding-001", async () => {
@@ -270,7 +270,7 @@ test("21. EMBEDDING DIMENSION INVARIANT — Remains strictly 1536", async () => 
 });
 
 test("22. PROVIDER REQUEST SPECIFICATION — Verified outputDimensionality 1536", async () => {
-  const provider = new GeminiAIProvider("mock_key", "gemini-2.5-flash", "gemini-embedding-001");
+  const provider = new GeminiAIProvider("mock_key", "gemini-3.6-flash", "gemini-embedding-001");
   assert.ok(provider, "GeminiAIProvider instance created");
   const providerPath = path.resolve(__dirname, "../src/lib/ai/provider.ts");
   const providerContent = fs.readFileSync(providerPath, "utf-8");
@@ -284,7 +284,7 @@ test("22. PROVIDER REQUEST SPECIFICATION — Verified outputDimensionality 1536"
   );
 });
 
-test("23. OLD MODEL IDENTIFIER EXCLUSION — gemini-1.5-pro and text-embedding-004 excluded from production code", async () => {
+test("23. OLD MODEL IDENTIFIER EXCLUSION — gemini-1.5-pro, gemini-2.5-flash, and text-embedding-004 excluded from production code", async () => {
   const configPath = path.resolve(__dirname, "../src/lib/ai/config.ts");
   const providerPath = path.resolve(__dirname, "../src/lib/ai/provider.ts");
   const schemaPath = path.resolve(__dirname, "../src/db/schema/ai.ts");
@@ -297,6 +297,11 @@ test("23. OLD MODEL IDENTIFIER EXCLUSION — gemini-1.5-pro and text-embedding-0
     configContent.includes("gemini-1.5-pro"),
     false,
     "config.ts must not contain gemini-1.5-pro",
+  );
+  assert.equal(
+    configContent.includes("gemini-2.5-flash"),
+    false,
+    "config.ts must not contain gemini-2.5-flash",
   );
   assert.equal(
     configContent.includes("text-embedding-004"),
@@ -314,9 +319,19 @@ test("23. OLD MODEL IDENTIFIER EXCLUSION — gemini-1.5-pro and text-embedding-0
     "provider.ts must not contain default gemini-1.5-pro",
   );
   assert.equal(
+    providerContent.includes("gemini-2.5-flash"),
+    false,
+    "provider.ts must not contain default gemini-2.5-flash",
+  );
+  assert.equal(
     schemaContent.includes("gemini-1.5-pro"),
     false,
     "schema/ai.ts must not default to gemini-1.5-pro",
+  );
+  assert.equal(
+    schemaContent.includes("gemini-2.5-flash"),
+    false,
+    "schema/ai.ts must not default to gemini-2.5-flash",
   );
 });
 

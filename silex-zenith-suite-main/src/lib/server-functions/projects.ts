@@ -2,8 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireWorkspaceAccess } from "@/lib/auth/workspace";
 import { db } from "@/db";
-import { projects, tasks, clients } from "@/db/schema";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { projects, tasks, clients, taskAssignees, taskTags, users, workspaceMembers } from "@/db/schema";
+import { eq, and, isNull, desc, inArray } from "drizzle-orm";
 
 // Input Schemas
 export const getProjectsInputSchema = z.object({
@@ -32,6 +32,40 @@ export const createProjectInputSchema = z.object({
 export const getDashboardTasksInputSchema = z.object({
   workspaceId: z.string().optional(),
   projectId: z.string().optional(),
+});
+
+export const createTaskInputSchema = z.object({
+  workspaceId: z.string().optional(),
+  projectId: z.string().optional(),
+  title: z.string().min(1, "Task title is required").max(255),
+  description: z.string().optional(),
+  priority: z.string().default("medium"),
+  status: z.string().default("todo"),
+  dueDate: z.string().optional(),
+  estimatedHours: z.union([z.number(), z.string()]).optional(),
+  assigneeUserIds: z.array(z.string()).optional(),
+});
+
+export const updateTaskStatusInputSchema = z.object({
+  workspaceId: z.string().optional(),
+  taskId: z.string().min(1, "Task ID is required"),
+  status: z.string().min(1, "Status is required"),
+});
+
+export const updateTaskInputSchema = z.object({
+  workspaceId: z.string().optional(),
+  taskId: z.string().min(1, "Task ID is required"),
+  title: z.string().min(1, "Title cannot be empty").optional(),
+  description: z.string().nullable().optional(),
+  priority: z.string().optional(),
+  dueDate: z.string().nullable().optional(),
+  estimatedHours: z.union([z.number(), z.string()]).nullable().optional(),
+  assigneeUserIds: z.array(z.string()).optional(),
+});
+
+export const deleteTaskInputSchema = z.object({
+  workspaceId: z.string().optional(),
+  taskId: z.string().min(1, "Task ID is required"),
 });
 
 /**
@@ -108,7 +142,7 @@ export const getProjectsFn = createServerFn({ method: "GET" })
 
 /**
  * Server Function: getProjectByIdFn
- * Retrieves project details and associated tasks for the authorized workspace.
+ * Retrieves project details and associated tasks for the authorized workspace augmented with assignees and tags.
  */
 export const getProjectByIdFn = createServerFn({ method: "GET" })
   .validator((data: unknown) => getProjectByIdInputSchema.parse(data))
@@ -153,6 +187,66 @@ export const getProjectByIdFn = createServerFn({ method: "GET" })
       )
       .orderBy(desc(tasks.createdAt));
 
+    const taskIds = taskRows.map((t) => t.id);
+
+    const assigneesByTaskId: Record<
+      string,
+      Array<{ id: string; fullName: string; email: string; avatarUrl: string | null }>
+    > = {};
+
+    if (taskIds.length > 0) {
+      const assigneeRows = await db
+        .select({
+          taskId: taskAssignees.taskId,
+          user: {
+            id: users.id,
+            fullName: users.fullName,
+            email: users.email,
+            avatarUrl: users.avatarUrl,
+          },
+        })
+        .from(taskAssignees)
+        .innerJoin(users, eq(taskAssignees.userId, users.id))
+        .where(
+          and(
+            inArray(taskAssignees.taskId, taskIds),
+            eq(taskAssignees.workspaceId, auth.workspaceId)
+          )
+        );
+
+      for (const row of assigneeRows) {
+        if (!assigneesByTaskId[row.taskId]) {
+          assigneesByTaskId[row.taskId] = [];
+        }
+        assigneesByTaskId[row.taskId].push(row.user);
+      }
+    }
+
+    const activeMembers = await db
+      .select({
+        id: users.id,
+        fullName: users.fullName,
+        email: users.email,
+        avatarUrl: users.avatarUrl,
+      })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(workspaceMembers.userId, users.id))
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, auth.workspaceId),
+          eq(workspaceMembers.status, "active")
+        )
+      );
+
+    const workspaceTags = await db
+      .select({
+        id: taskTags.id,
+        name: taskTags.name,
+        colorHex: taskTags.colorHex,
+      })
+      .from(taskTags)
+      .where(eq(taskTags.workspaceId, auth.workspaceId));
+
     return {
       project: {
         id: project.id,
@@ -171,16 +265,54 @@ export const getProjectByIdFn = createServerFn({ method: "GET" })
             companyName: client.companyName,
           }
         : null,
+      members: activeMembers,
       tasks: taskRows.map((t) => ({
         id: t.id,
         title: t.title,
         description: t.description,
         status: t.status,
         priority: t.priority,
+        estimatedHours: t.estimatedHours ? Number(t.estimatedHours) : null,
         dueDate: t.dueDate ? t.dueDate.toISOString() : null,
         completedAt: t.completedAt ? t.completedAt.toISOString() : null,
+        createdAt: t.createdAt.toISOString(),
+        updatedAt: t.updatedAt.toISOString(),
+        assignees: assigneesByTaskId[t.id] || [],
+        tags: workspaceTags || [],
       })),
     };
+  });
+
+export const getWorkspaceMembersInputSchema = z.object({
+  workspaceId: z.string().optional(),
+});
+
+export const getWorkspaceMembersFn = createServerFn({ method: "GET" })
+  .validator((data?: unknown) => getWorkspaceMembersInputSchema.parse(data ?? {}))
+  .handler(async ({ data }) => {
+    const auth = await requireWorkspaceAccess({ workspaceId: data?.workspaceId });
+
+    if (!db) {
+      throw new Error("Database client is uninitialized.");
+    }
+
+    const members = await db
+      .select({
+        id: users.id,
+        fullName: users.fullName,
+        email: users.email,
+        avatarUrl: users.avatarUrl,
+      })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(workspaceMembers.userId, users.id))
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, auth.workspaceId),
+          eq(workspaceMembers.status, "active")
+        )
+      );
+
+    return { members };
   });
 
 /**
@@ -260,6 +392,432 @@ export const createProjectFn = createServerFn({ method: "POST" })
         createdAt: newProject.createdAt.toISOString(),
       };
     });
+  });
+
+/**
+ * Server Function: createTaskFn
+ * Creates a task in the authorized workspace, assigns members, and publishes task.created inside a transaction.
+ */
+export const createTaskFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) => createTaskInputSchema.parse(data))
+  .handler(async ({ data }) => {
+    const auth = await requireWorkspaceAccess({ workspaceId: data.workspaceId });
+
+    if (!db) {
+      throw new Error("Database client is uninitialized.");
+    }
+
+    const { publishDomainEvent } = await import("@/lib/events");
+
+    return await db.transaction(async (tx) => {
+      if (data.projectId) {
+        const [projectRow] = await tx
+          .select({ id: projects.id })
+          .from(projects)
+          .where(
+            and(
+              eq(projects.id, data.projectId),
+              eq(projects.workspaceId, auth.workspaceId),
+              isNull(projects.deletedAt)
+            )
+          )
+          .limit(1);
+
+        if (!projectRow) {
+          throw new Error("PROJECT_NOT_FOUND: Target project does not exist or access denied.");
+        }
+      }
+
+      const assigneeIds = Array.from(new Set(data.assigneeUserIds || [])).filter(Boolean);
+      if (assigneeIds.length > 0) {
+        const validMembers = await tx
+          .select({ userId: workspaceMembers.userId })
+          .from(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, auth.workspaceId),
+              inArray(workspaceMembers.userId, assigneeIds),
+              eq(workspaceMembers.status, "active")
+            )
+          );
+
+        if (validMembers.length !== assigneeIds.length) {
+          throw new Error("INVALID_ASSIGNEE: One or more assignees do not belong to the authorized workspace.");
+        }
+      }
+
+      const [newTask] = await tx
+        .insert(tasks)
+        .values({
+          workspaceId: auth.workspaceId,
+          projectId: data.projectId || null,
+          title: data.title.trim(),
+          description: data.description || null,
+          status: data.status || "todo",
+          priority: data.priority || "medium",
+          estimatedHours: data.estimatedHours != null ? String(data.estimatedHours) : null,
+          dueDate: data.dueDate ? new Date(data.dueDate) : null,
+          createdBy: auth.userId,
+        })
+        .returning();
+
+      if (assigneeIds.length > 0) {
+        await tx.insert(taskAssignees).values(
+          assigneeIds.map((userId) => ({
+            taskId: newTask.id,
+            userId,
+            workspaceId: auth.workspaceId,
+          }))
+        );
+      }
+
+      await publishDomainEvent(
+        {
+          workspaceId: auth.workspaceId,
+          eventType: "task.created",
+          aggregateType: "task",
+          aggregateId: newTask.id,
+          actorId: auth.userId,
+          payload: {
+            taskId: newTask.id,
+            projectId: newTask.projectId,
+            title: newTask.title,
+            priority: newTask.priority,
+            status: newTask.status,
+            dueDate: newTask.dueDate ? newTask.dueDate.toISOString() : null,
+            createdBy: auth.userId,
+          },
+        },
+        tx
+      );
+
+      return {
+        id: newTask.id,
+        workspaceId: newTask.workspaceId,
+        projectId: newTask.projectId,
+        title: newTask.title,
+        description: newTask.description,
+        status: newTask.status,
+        priority: newTask.priority,
+        estimatedHours: newTask.estimatedHours ? Number(newTask.estimatedHours) : null,
+        dueDate: newTask.dueDate ? newTask.dueDate.toISOString() : null,
+        completedAt: newTask.completedAt ? newTask.completedAt.toISOString() : null,
+        assigneeUserIds: assigneeIds,
+        createdAt: newTask.createdAt.toISOString(),
+        updatedAt: newTask.updatedAt.toISOString(),
+      };
+    });
+  });
+
+/**
+ * Server Function: updateTaskStatusFn
+ * Updates a task's status, managing completedAt and emitting task.updated / task.completed events in a transaction.
+ */
+export const updateTaskStatusFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) => updateTaskStatusInputSchema.parse(data))
+  .handler(async ({ data }) => {
+    const auth = await requireWorkspaceAccess({ workspaceId: data.workspaceId });
+
+    if (!db) {
+      throw new Error("Database client is uninitialized.");
+    }
+
+    const { publishDomainEvent } = await import("@/lib/events");
+
+    return await db.transaction(async (tx) => {
+      const [existingTask] = await tx
+        .select()
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.id, data.taskId),
+            eq(tasks.workspaceId, auth.workspaceId),
+            isNull(tasks.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (!existingTask) {
+        throw new Error("TASK_NOT_FOUND: Task not found or access denied.");
+      }
+
+      const isOldCompleted = existingTask.status === "completed" || existingTask.status === "done";
+      const isNewCompleted = data.status === "completed" || data.status === "done";
+
+      const now = new Date();
+      let completedAtValue: Date | null = existingTask.completedAt;
+
+      if (!isOldCompleted && isNewCompleted) {
+        completedAtValue = now;
+      } else if (isOldCompleted && !isNewCompleted) {
+        completedAtValue = null;
+      }
+
+      const [updatedTask] = await tx
+        .update(tasks)
+        .set({
+          status: data.status,
+          completedAt: completedAtValue,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(tasks.id, data.taskId),
+            eq(tasks.workspaceId, auth.workspaceId)
+          )
+        )
+        .returning();
+
+      if (!isOldCompleted && isNewCompleted) {
+        await publishDomainEvent(
+          {
+            workspaceId: auth.workspaceId,
+            eventType: "task.updated",
+            aggregateType: "task",
+            aggregateId: updatedTask.id,
+            actorId: auth.userId,
+            payload: {
+              taskId: updatedTask.id,
+              projectId: updatedTask.projectId,
+              title: updatedTask.title,
+              priority: updatedTask.priority,
+              status: updatedTask.status,
+            },
+          },
+          tx
+        );
+
+        await publishDomainEvent(
+          {
+            workspaceId: auth.workspaceId,
+            eventType: "task.completed",
+            aggregateType: "task",
+            aggregateId: updatedTask.id,
+            actorId: auth.userId,
+            payload: {
+              taskId: updatedTask.id,
+              projectId: updatedTask.projectId,
+              title: updatedTask.title,
+              completedAt: updatedTask.completedAt!.toISOString(),
+              createdBy: auth.userId,
+            },
+          },
+          tx
+        );
+      } else if (existingTask.status !== data.status) {
+        await publishDomainEvent(
+          {
+            workspaceId: auth.workspaceId,
+            eventType: "task.updated",
+            aggregateType: "task",
+            aggregateId: updatedTask.id,
+            actorId: auth.userId,
+            payload: {
+              taskId: updatedTask.id,
+              projectId: updatedTask.projectId,
+              title: updatedTask.title,
+              priority: updatedTask.priority,
+              status: updatedTask.status,
+            },
+          },
+          tx
+        );
+      }
+
+      return {
+        id: updatedTask.id,
+        workspaceId: updatedTask.workspaceId,
+        projectId: updatedTask.projectId,
+        title: updatedTask.title,
+        status: updatedTask.status,
+        completedAt: updatedTask.completedAt ? updatedTask.completedAt.toISOString() : null,
+        updatedAt: updatedTask.updatedAt.toISOString(),
+      };
+    });
+  });
+
+/**
+ * Server Function: updateTaskFn
+ * Updates editable task details and replaces assignees atomically within a transaction.
+ */
+export const updateTaskFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) => updateTaskInputSchema.parse(data))
+  .handler(async ({ data }) => {
+    const auth = await requireWorkspaceAccess({ workspaceId: data.workspaceId });
+
+    if (!db) {
+      throw new Error("Database client is uninitialized.");
+    }
+
+    const { publishDomainEvent } = await import("@/lib/events");
+
+    return await db.transaction(async (tx) => {
+      const [existingTask] = await tx
+        .select()
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.id, data.taskId),
+            eq(tasks.workspaceId, auth.workspaceId),
+            isNull(tasks.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (!existingTask) {
+        throw new Error("TASK_NOT_FOUND: Task not found or access denied.");
+      }
+
+      let finalAssigneeIds: string[] | undefined = undefined;
+      if (data.assigneeUserIds !== undefined) {
+        const assigneeIds = Array.from(new Set(data.assigneeUserIds)).filter(Boolean);
+
+        if (assigneeIds.length > 0) {
+          const validMembers = await tx
+            .select({ userId: workspaceMembers.userId })
+            .from(workspaceMembers)
+            .where(
+              and(
+                eq(workspaceMembers.workspaceId, auth.workspaceId),
+                inArray(workspaceMembers.userId, assigneeIds),
+                eq(workspaceMembers.status, "active")
+              )
+            );
+
+          if (validMembers.length !== assigneeIds.length) {
+            throw new Error("INVALID_ASSIGNEE: One or more assignees do not belong to authorized workspace.");
+          }
+        }
+
+        await tx
+          .delete(taskAssignees)
+          .where(
+            and(
+              eq(taskAssignees.taskId, data.taskId),
+              eq(taskAssignees.workspaceId, auth.workspaceId)
+            )
+          );
+
+        if (assigneeIds.length > 0) {
+          await tx.insert(taskAssignees).values(
+            assigneeIds.map((userId) => ({
+              taskId: data.taskId,
+              userId,
+              workspaceId: auth.workspaceId,
+            }))
+          );
+        }
+
+        finalAssigneeIds = assigneeIds;
+      }
+
+      const updateValues: Record<string, any> = {
+        updatedAt: new Date(),
+      };
+
+      if (data.title !== undefined) updateValues.title = data.title.trim();
+      if (data.description !== undefined) updateValues.description = data.description;
+      if (data.priority !== undefined) updateValues.priority = data.priority;
+      if (data.dueDate !== undefined) {
+        updateValues.dueDate = data.dueDate ? new Date(data.dueDate) : null;
+      }
+      if (data.estimatedHours !== undefined) {
+        updateValues.estimatedHours = data.estimatedHours != null ? String(data.estimatedHours) : null;
+      }
+
+      const [updatedTask] = await tx
+        .update(tasks)
+        .set(updateValues)
+        .where(
+          and(
+            eq(tasks.id, data.taskId),
+            eq(tasks.workspaceId, auth.workspaceId)
+          )
+        )
+        .returning();
+
+      await publishDomainEvent(
+        {
+          workspaceId: auth.workspaceId,
+          eventType: "task.updated",
+          aggregateType: "task",
+          aggregateId: updatedTask.id,
+          actorId: auth.userId,
+          payload: {
+            taskId: updatedTask.id,
+            projectId: updatedTask.projectId,
+            title: updatedTask.title,
+            priority: updatedTask.priority,
+            status: updatedTask.status,
+          },
+        },
+        tx
+      );
+
+      return {
+        id: updatedTask.id,
+        workspaceId: updatedTask.workspaceId,
+        projectId: updatedTask.projectId,
+        title: updatedTask.title,
+        description: updatedTask.description,
+        status: updatedTask.status,
+        priority: updatedTask.priority,
+        estimatedHours: updatedTask.estimatedHours ? Number(updatedTask.estimatedHours) : null,
+        dueDate: updatedTask.dueDate ? updatedTask.dueDate.toISOString() : null,
+        completedAt: updatedTask.completedAt ? updatedTask.completedAt.toISOString() : null,
+        assigneeUserIds: finalAssigneeIds,
+        updatedAt: updatedTask.updatedAt.toISOString(),
+      };
+    });
+  });
+
+/**
+ * Server Function: deleteTaskFn
+ * Soft deletes a task in the authorized workspace (sets deletedAt). Never physically deletes.
+ */
+export const deleteTaskFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) => deleteTaskInputSchema.parse(data))
+  .handler(async ({ data }) => {
+    const auth = await requireWorkspaceAccess({ workspaceId: data.workspaceId });
+
+    if (!db) {
+      throw new Error("Database client is uninitialized.");
+    }
+
+    const [taskRow] = await db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.id, data.taskId),
+          eq(tasks.workspaceId, auth.workspaceId),
+          isNull(tasks.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!taskRow) {
+      throw new Error("TASK_NOT_FOUND: Task not found or access denied.");
+    }
+
+    const now = new Date();
+    await db
+      .update(tasks)
+      .set({
+        deletedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(tasks.id, data.taskId),
+          eq(tasks.workspaceId, auth.workspaceId)
+        )
+      );
+
+    return {
+      success: true,
+      taskId: data.taskId,
+    };
   });
 
 /**

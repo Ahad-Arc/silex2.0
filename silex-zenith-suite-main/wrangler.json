@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "silex-zenith-suite",
+  "main": "./.output/server/index.mjs",
+  "compatibility_date": "2024-09-26",
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  }
+}

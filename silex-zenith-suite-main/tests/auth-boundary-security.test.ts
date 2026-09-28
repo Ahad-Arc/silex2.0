@@ -269,3 +269,79 @@ test("6. LEGITIMATE AUTHENTICATION FLOWS PRESERVED", async () => {
   assert.equal(customError.code, "USER_NOT_PROVISIONED");
   assert.equal(customError.name, "AuthContextError");
 });
+
+test("7. OAUTH REDIRECT TARGET PRESERVATION — Preserves destination in callback URL", () => {
+  const authSource = fs.readFileSync(
+    path.join(srcDir, "routes/auth.tsx"),
+    "utf-8",
+  );
+
+  // Verifies that auth.tsx appends redirect parameter to callback URL
+  assert.ok(
+    authSource.includes("encodeURIComponent(redirectTarget)"),
+    "auth.tsx must encode and append redirectTarget to OAuth callback URL",
+  );
+
+  const callbackSource = fs.readFileSync(
+    path.join(srcDir, "routes/auth.callback.tsx"),
+    "utf-8",
+  );
+
+  // Verifies that callback route reads redirect parameter
+  assert.ok(
+    callbackSource.includes("urlParams.get(\"redirect\")"),
+    "auth.callback.tsx must read the redirect URL parameter for post-auth routing",
+  );
+});
+
+test("8. LOGOUT LIFECYCLE & ROUTE TEARDOWN — Explicit sign-out transitions to /auth", () => {
+  const appShellSource = fs.readFileSync(
+    path.join(srcDir, "components/silex/app-shell.tsx"),
+    "utf-8",
+  );
+
+  // AppShell must await signOut and navigate to /auth with replace
+  assert.ok(
+    appShellSource.includes("await signOut()"),
+    "AppShell must await signOut() upon user click",
+  );
+  assert.ok(
+    appShellSource.includes("navigate({ to: \"/auth\", replace: true })"),
+    "AppShell must explicitly navigate to /auth after sign-out",
+  );
+
+  const authProviderSource = fs.readFileSync(
+    path.join(srcDir, "lib/supabase/AuthProvider.tsx"),
+    "utf-8",
+  );
+
+  // AuthProvider must clear both user and session in finally block
+  assert.ok(
+    authProviderSource.includes("setUser(null)"),
+    "AuthProvider signOut must clear user state",
+  );
+  assert.ok(
+    authProviderSource.includes("setSession(null)"),
+    "AuthProvider signOut must clear session state",
+  );
+});
+
+test("9. SERVER-SIDE AUTHORIZATION SECURITY BOUNDARY — Client execution blocked", async () => {
+  const serverContextSource = fs.readFileSync(
+    path.join(srcDir, "lib/supabase/server-context.ts"),
+    "utf-8",
+  );
+  assert.ok(
+    serverContextSource.includes("typeof window !== \"undefined\""),
+    "getServerAuthContext must contain browser execution guard",
+  );
+
+  const workspaceAuthSource = fs.readFileSync(
+    path.join(srcDir, "lib/auth/workspace.ts"),
+    "utf-8",
+  );
+  assert.ok(
+    workspaceAuthSource.includes("typeof window !== \"undefined\""),
+    "requireWorkspaceAccess must contain browser execution guard",
+  );
+});

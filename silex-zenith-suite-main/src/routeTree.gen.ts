@@ -17,15 +17,19 @@ import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAiRouteImport } from './routes/app.ai'
 import { Route as AppAnalyticsRouteImport } from './routes/app.analytics'
 import { Route as AppClientsRouteImport } from './routes/app.clients'
+import { Route as AppDocumentsRouteImport } from './routes/app.documents'
 import { Route as AppInvoicesRouteImport } from './routes/app.invoices'
 import { Route as AppNotificationsRouteImport } from './routes/app.notifications'
 import { Route as AppPaymentsRouteImport } from './routes/app.payments'
 import { Route as AppProfileRouteImport } from './routes/app.profile'
+import { Route as AppProjectsRouteImport } from './routes/app.projects'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AppClientsIdRouteImport } from './routes/app.clients.$id'
+import { Route as AppDocumentsIdRouteImport } from './routes/app.documents.$id'
 import { Route as AppInvoicesIdRouteImport } from './routes/app.invoices.$id'
 import { Route as AppInvoicesNewRouteImport } from './routes/app.invoices.new'
+import { Route as AppProjectsIdRouteImport } from './routes/app.projects.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -67,6 +71,11 @@ const AppClientsRoute = AppClientsRouteImport.update({
   path: '/clients',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDocumentsRoute = AppDocumentsRouteImport.update({
+  id: '/documents',
+  path: '/documents',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppInvoicesRoute = AppInvoicesRouteImport.update({
   id: '/invoices',
   path: '/invoices',
@@ -87,6 +96,11 @@ const AppProfileRoute = AppProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AppRoute,
 } as any)
+const AppProjectsRoute = AppProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -102,6 +116,11 @@ const AppClientsIdRoute = AppClientsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppClientsRoute,
 } as any)
+const AppDocumentsIdRoute = AppDocumentsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppDocumentsRoute,
+} as any)
 const AppInvoicesIdRoute = AppInvoicesIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -112,6 +131,11 @@ const AppInvoicesNewRoute = AppInvoicesNewRouteImport.update({
   path: '/new',
   getParentRoute: () => AppInvoicesRoute,
 } as any)
+const AppProjectsIdRoute = AppProjectsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppProjectsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -121,16 +145,20 @@ export interface FileRoutesByFullPath {
   '/app/ai': typeof AppAiRoute
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/clients': typeof AppClientsRouteWithChildren
+  '/app/documents': typeof AppDocumentsRouteWithChildren
   '/app/invoices': typeof AppInvoicesRouteWithChildren
   '/app/notifications': typeof AppNotificationsRoute
   '/app/payments': typeof AppPaymentsRoute
   '/app/profile': typeof AppProfileRoute
+  '/app/projects': typeof AppProjectsRouteWithChildren
   '/app/settings': typeof AppSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/app/': typeof AppIndexRoute
   '/app/clients/$id': typeof AppClientsIdRoute
+  '/app/documents/$id': typeof AppDocumentsIdRoute
   '/app/invoices/$id': typeof AppInvoicesIdRoute
   '/app/invoices/new': typeof AppInvoicesNewRoute
+  '/app/projects/$id': typeof AppProjectsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -139,16 +167,20 @@ export interface FileRoutesByTo {
   '/app/ai': typeof AppAiRoute
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/clients': typeof AppClientsRouteWithChildren
+  '/app/documents': typeof AppDocumentsRouteWithChildren
   '/app/invoices': typeof AppInvoicesRouteWithChildren
   '/app/notifications': typeof AppNotificationsRoute
   '/app/payments': typeof AppPaymentsRoute
   '/app/profile': typeof AppProfileRoute
+  '/app/projects': typeof AppProjectsRouteWithChildren
   '/app/settings': typeof AppSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/app': typeof AppIndexRoute
   '/app/clients/$id': typeof AppClientsIdRoute
+  '/app/documents/$id': typeof AppDocumentsIdRoute
   '/app/invoices/$id': typeof AppInvoicesIdRoute
   '/app/invoices/new': typeof AppInvoicesNewRoute
+  '/app/projects/$id': typeof AppProjectsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -159,16 +191,20 @@ export interface FileRoutesById {
   '/app/ai': typeof AppAiRoute
   '/app/analytics': typeof AppAnalyticsRoute
   '/app/clients': typeof AppClientsRouteWithChildren
+  '/app/documents': typeof AppDocumentsRouteWithChildren
   '/app/invoices': typeof AppInvoicesRouteWithChildren
   '/app/notifications': typeof AppNotificationsRoute
   '/app/payments': typeof AppPaymentsRoute
   '/app/profile': typeof AppProfileRoute
+  '/app/projects': typeof AppProjectsRouteWithChildren
   '/app/settings': typeof AppSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/app/': typeof AppIndexRoute
   '/app/clients/$id': typeof AppClientsIdRoute
+  '/app/documents/$id': typeof AppDocumentsIdRoute
   '/app/invoices/$id': typeof AppInvoicesIdRoute
   '/app/invoices/new': typeof AppInvoicesNewRoute
+  '/app/projects/$id': typeof AppProjectsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -180,16 +216,20 @@ export interface FileRouteTypes {
     | '/app/ai'
     | '/app/analytics'
     | '/app/clients'
+    | '/app/documents'
     | '/app/invoices'
     | '/app/notifications'
     | '/app/payments'
     | '/app/profile'
+    | '/app/projects'
     | '/app/settings'
     | '/auth/callback'
     | '/app/'
     | '/app/clients/$id'
+    | '/app/documents/$id'
     | '/app/invoices/$id'
     | '/app/invoices/new'
+    | '/app/projects/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -198,16 +238,20 @@ export interface FileRouteTypes {
     | '/app/ai'
     | '/app/analytics'
     | '/app/clients'
+    | '/app/documents'
     | '/app/invoices'
     | '/app/notifications'
     | '/app/payments'
     | '/app/profile'
+    | '/app/projects'
     | '/app/settings'
     | '/auth/callback'
     | '/app'
     | '/app/clients/$id'
+    | '/app/documents/$id'
     | '/app/invoices/$id'
     | '/app/invoices/new'
+    | '/app/projects/$id'
   id:
     | '__root__'
     | '/'
@@ -217,16 +261,20 @@ export interface FileRouteTypes {
     | '/app/ai'
     | '/app/analytics'
     | '/app/clients'
+    | '/app/documents'
     | '/app/invoices'
     | '/app/notifications'
     | '/app/payments'
     | '/app/profile'
+    | '/app/projects'
     | '/app/settings'
     | '/auth/callback'
     | '/app/'
     | '/app/clients/$id'
+    | '/app/documents/$id'
     | '/app/invoices/$id'
     | '/app/invoices/new'
+    | '/app/projects/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -294,6 +342,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppClientsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/documents': {
+      id: '/app/documents'
+      path: '/documents'
+      fullPath: '/app/documents'
+      preLoaderRoute: typeof AppDocumentsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/invoices': {
       id: '/app/invoices'
       path: '/invoices'
@@ -322,6 +377,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProfileRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/projects': {
+      id: '/app/projects'
+      path: '/projects'
+      fullPath: '/app/projects'
+      preLoaderRoute: typeof AppProjectsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/settings': {
       id: '/app/settings'
       path: '/settings'
@@ -343,6 +405,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppClientsIdRouteImport
       parentRoute: typeof AppClientsRoute
     }
+    '/app/documents/$id': {
+      id: '/app/documents/$id'
+      path: '/$id'
+      fullPath: '/app/documents/$id'
+      preLoaderRoute: typeof AppDocumentsIdRouteImport
+      parentRoute: typeof AppDocumentsRoute
+    }
     '/app/invoices/$id': {
       id: '/app/invoices/$id'
       path: '/$id'
@@ -356,6 +425,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/invoices/new'
       preLoaderRoute: typeof AppInvoicesNewRouteImport
       parentRoute: typeof AppInvoicesRoute
+    }
+    '/app/projects/$id': {
+      id: '/app/projects/$id'
+      path: '/$id'
+      fullPath: '/app/projects/$id'
+      preLoaderRoute: typeof AppProjectsIdRouteImport
+      parentRoute: typeof AppProjectsRoute
     }
   }
 }
@@ -372,6 +448,18 @@ const AppClientsRouteWithChildren = AppClientsRoute._addFileChildren(
   AppClientsRouteChildren,
 )
 
+interface AppDocumentsRouteChildren {
+  AppDocumentsIdRoute: typeof AppDocumentsIdRoute
+}
+
+const AppDocumentsRouteChildren: AppDocumentsRouteChildren = {
+  AppDocumentsIdRoute: AppDocumentsIdRoute,
+}
+
+const AppDocumentsRouteWithChildren = AppDocumentsRoute._addFileChildren(
+  AppDocumentsRouteChildren,
+)
+
 interface AppInvoicesRouteChildren {
   AppInvoicesIdRoute: typeof AppInvoicesIdRoute
   AppInvoicesNewRoute: typeof AppInvoicesNewRoute
@@ -386,14 +474,28 @@ const AppInvoicesRouteWithChildren = AppInvoicesRoute._addFileChildren(
   AppInvoicesRouteChildren,
 )
 
+interface AppProjectsRouteChildren {
+  AppProjectsIdRoute: typeof AppProjectsIdRoute
+}
+
+const AppProjectsRouteChildren: AppProjectsRouteChildren = {
+  AppProjectsIdRoute: AppProjectsIdRoute,
+}
+
+const AppProjectsRouteWithChildren = AppProjectsRoute._addFileChildren(
+  AppProjectsRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAiRoute: typeof AppAiRoute
   AppAnalyticsRoute: typeof AppAnalyticsRoute
   AppClientsRoute: typeof AppClientsRouteWithChildren
+  AppDocumentsRoute: typeof AppDocumentsRouteWithChildren
   AppInvoicesRoute: typeof AppInvoicesRouteWithChildren
   AppNotificationsRoute: typeof AppNotificationsRoute
   AppPaymentsRoute: typeof AppPaymentsRoute
   AppProfileRoute: typeof AppProfileRoute
+  AppProjectsRoute: typeof AppProjectsRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
   AppIndexRoute: typeof AppIndexRoute
 }
@@ -402,10 +504,12 @@ const AppRouteChildren: AppRouteChildren = {
   AppAiRoute: AppAiRoute,
   AppAnalyticsRoute: AppAnalyticsRoute,
   AppClientsRoute: AppClientsRouteWithChildren,
+  AppDocumentsRoute: AppDocumentsRouteWithChildren,
   AppInvoicesRoute: AppInvoicesRouteWithChildren,
   AppNotificationsRoute: AppNotificationsRoute,
   AppPaymentsRoute: AppPaymentsRoute,
   AppProfileRoute: AppProfileRoute,
+  AppProjectsRoute: AppProjectsRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,
   AppIndexRoute: AppIndexRoute,
 }

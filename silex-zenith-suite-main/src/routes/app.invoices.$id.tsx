@@ -1,9 +1,23 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { ArrowLeft, Download, Send, Printer, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Download,
+  Send,
+  Printer,
+  CheckCircle2,
+  Loader2,
+  AlertCircle,
+  Building,
+} from "lucide-react";
 import { toast } from "sonner";
 import { SilexLogo } from "@/components/silex/logo";
-import { getInvoiceByIdFn, createPaymentFn } from "@/lib/server-functions/invoices";
+import {
+  getInvoiceByIdFn,
+  createPaymentFn,
+  updateInvoiceStatusFn,
+} from "@/lib/server-functions/invoices";
+import { getWorkspaceSettingsFn } from "@/lib/server-functions/workspaces";
 
 export const Route = createFileRoute("/app/invoices/$id")({
   head: ({ params }) => ({
@@ -48,25 +62,49 @@ interface InvoiceDetailData {
   }>;
 }
 
-function InvoicePreview() {
+interface WorkspaceSenderProfile {
+  name: string;
+  slug: string;
+  taxId: string | null;
+}
+
+export function InvoicePreview() {
   const { id } = Route.useParams();
   const [data, setData] = useState<InvoiceDetailData | null>(null);
+  const [workspaceProfile, setWorkspaceProfile] =
+    useState<WorkspaceSenderProfile | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isPaying, setIsPaying] = useState<boolean>(false);
+  const [isSending, setIsSending] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const loadDetail = async () => {
     try {
       setIsLoading(true);
       setErrorMsg(null);
-      const res = await getInvoiceByIdFn({ data: { invoiceId: id } });
-      if (res) {
-        setData(res);
+
+      const [invRes, wsRes] = await Promise.all([
+        getInvoiceByIdFn({ data: { invoiceId: id } }),
+        getWorkspaceSettingsFn().catch(() => null),
+      ]);
+
+      if (invRes) {
+        setData(invRes);
       } else {
         setErrorMsg("Invoice not found in authorized workspace.");
       }
+
+      if (wsRes?.workspace) {
+        setWorkspaceProfile({
+          name: wsRes.workspace.name,
+          slug: wsRes.workspace.slug,
+          taxId: wsRes.settings?.taxId ?? null,
+        });
+      }
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Failed to load invoice details.");
+      setErrorMsg(
+        err instanceof Error ? err.message : "Failed to load invoice details."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -98,20 +136,53 @@ function InvoicePreview() {
           transactionReference: `ref_${Date.now()}`,
         },
       });
-      toast.success(`Payment of $${(remainingCents / 100).toFixed(2)} recorded!`);
-      loadDetail();
+      toast.success(
+        `Payment of $${(remainingCents / 100).toFixed(2)} recorded!`
+      );
+      await loadDetail();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to process payment.");
+      toast.error(
+        err instanceof Error ? err.message : "Failed to process payment."
+      );
     } finally {
       setIsPaying(false);
     }
   };
 
+  const handleSendToClient = async () => {
+    if (!data) return;
+    try {
+      setIsSending(true);
+      await updateInvoiceStatusFn({
+        data: {
+          invoiceId: data.invoice.id,
+          status: "sent",
+        },
+      });
+      toast.success(
+        `Invoice #${data.invoice.invoiceNumber} marked as sent to client!`
+      );
+      await loadDetail();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update invoice status."
+      );
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const invoiceNumber = data?.invoice.invoiceNumber || id;
-  const clientName = data?.client?.companyName || "Client Business";
-  const contactEmail = data?.client?.contactEmail || "contact@client.co";
-  const totalDueCents = data ? Math.max(0, data.invoice.totalCents - data.invoice.amountPaidCents) : 1040738;
-  const isPaid = data ? data.invoice.status === "paid" || data.invoice.amountPaidCents >= data.invoice.totalCents : false;
+  const clientName = data?.client?.companyName || "Client";
+  const contactEmail = data?.client?.contactEmail || "";
+  const totalDueCents = data
+    ? Math.max(0, data.invoice.totalCents - data.invoice.amountPaidCents)
+    : 0;
+  const isPaid = data
+    ? data.invoice.status === "paid" ||
+      data.invoice.amountPaidCents >= data.invoice.totalCents
+    : false;
+  const isSent = data?.invoice.status === "sent";
 
   return (
     <div className="space-y-6 stagger">
@@ -125,15 +196,31 @@ function InvoicePreview() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card/60 px-3 py-2 text-[13px] hover:border-violet/50 transition"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card/60 px-3 py-2 text-[13px] hover:border-violet/50 transition cursor-pointer"
           >
             <Printer className="h-3.5 w-3.5" /> Print
           </button>
-          <button className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card/60 px-3 py-2 text-[13px] hover:border-violet/50 transition">
+          <button
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card/60 px-3 py-2 text-[13px] hover:border-violet/50 transition cursor-pointer"
+          >
             <Download className="h-3.5 w-3.5" /> PDF
           </button>
-          <button className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-2 text-[13px] font-medium shadow-float hover:bg-primary/90 transition">
-            <Send className="h-3.5 w-3.5" /> Send to client
+          <button
+            onClick={handleSendToClient}
+            disabled={isSending || isPaid || isSent}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-2 text-[13px] font-medium shadow-float hover:bg-primary/90 transition disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {isSending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : isPaid ? (
+              <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+            ) : isSent ? (
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            ) : (
+              <Send className="h-3.5 w-3.5" />
+            )}
+            {isPaid ? "Invoice Paid" : isSent ? "Sent to client" : "Send to client"}
           </button>
         </div>
       </div>
@@ -146,7 +233,10 @@ function InvoicePreview() {
         <div className="mx-auto max-w-md rounded-3xl border border-border bg-card p-8 text-center space-y-3">
           <AlertCircle className="h-8 w-8 text-destructive mx-auto" />
           <div className="text-base font-medium">{errorMsg}</div>
-          <Link to="/app/invoices" className="inline-block text-[13px] text-primary underline">
+          <Link
+            to="/app/invoices"
+            className="inline-block text-[13px] text-primary underline"
+          >
             Return to Invoices List
           </Link>
         </div>
@@ -159,11 +249,32 @@ function InvoicePreview() {
               <div className="relative flex flex-wrap items-start justify-between gap-6">
                 <SilexLogo className="text-primary-foreground [&_span]:!text-primary-foreground" />
                 <div className="text-right">
-                  <div className="text-[11px] uppercase tracking-widest opacity-70">Invoice</div>
+                  <div className="flex items-center justify-end gap-2">
+                    <span className="text-[11px] uppercase tracking-widest opacity-70">
+                      Invoice
+                    </span>
+                    {data?.invoice.status && (
+                      <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-white/20 text-primary-foreground">
+                        {data.invoice.status}
+                      </span>
+                    )}
+                  </div>
                   <div className="mt-1 text-3xl font-display">#{invoiceNumber}</div>
                   <div className="mt-1 text-[12px] opacity-70">
-                    Issued {data ? new Date(data.invoice.issueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "Sep 24"} · Due{" "}
-                    {data ? new Date(data.invoice.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Oct 8, 2026"}
+                    Issued{" "}
+                    {data
+                      ? new Date(data.invoice.issueDate).toLocaleDateString(
+                          "en-US",
+                          { month: "short", day: "numeric" }
+                        )
+                      : "Sep 24"}{" "}
+                    · Due{" "}
+                    {data
+                      ? new Date(data.invoice.dueDate).toLocaleDateString(
+                          "en-US",
+                          { month: "short", day: "numeric", year: "numeric" }
+                        )
+                      : "Oct 8, 2026"}
                   </div>
                 </div>
               </div>
@@ -175,10 +286,16 @@ function InvoicePreview() {
                   <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
                     From
                   </div>
-                  <div className="mt-1 text-[14px] font-medium">Workspace Studio</div>
-                  <div className="text-[12.5px] text-muted-foreground">billing@workspace.co</div>
+                  <div className="mt-1 text-[14px] font-medium">
+                    {workspaceProfile?.name || "Workspace Business"}
+                  </div>
                   <div className="text-[12.5px] text-muted-foreground">
-                    140 Wythe Ave, Brooklyn, NY 11249
+                    {`billing@${workspaceProfile?.slug || "workspace"}.co`}
+                  </div>
+                  <div className="text-[12.5px] text-muted-foreground">
+                    {workspaceProfile?.taxId
+                      ? `Tax ID: ${workspaceProfile.taxId}`
+                      : "Operating Business Account"}
                   </div>
                 </div>
                 <div>
@@ -186,7 +303,9 @@ function InvoicePreview() {
                     Bill to
                   </div>
                   <div className="mt-1 text-[14px] font-medium">{clientName}</div>
-                  <div className="text-[12.5px] text-muted-foreground">{contactEmail}</div>
+                  <div className="text-[12.5px] text-muted-foreground">
+                    {contactEmail}
+                  </div>
                 </div>
               </div>
 
@@ -205,31 +324,26 @@ function InvoicePreview() {
                           className="grid grid-cols-[minmax(0,1fr)_60px_80px_100px] gap-3 py-3"
                         >
                           <div>{r.description}</div>
-                          <div className="text-right tabular-nums">{r.quantity}</div>
+                          <div className="text-right tabular-nums">
+                            {r.quantity}
+                          </div>
                           <div className="text-right tabular-nums text-muted-foreground">
                             ${(r.unitPriceCents / 100).toFixed(2)}
                           </div>
                           <div className="text-right tabular-nums font-medium">
-                            ${(r.amountCents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            $
+                            {(r.amountCents / 100).toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
                           </div>
                         </div>
                       ))
-                    : [
-                        { d: "Q3 brand system refresh", q: 42, r: 185 },
-                        { d: "Licensing bundle — team of 12", q: 1, r: 1200 },
-                      ].map((r, i) => (
-                        <div
-                          key={i}
-                          className="grid grid-cols-[minmax(0,1fr)_60px_80px_100px] gap-3 py-3"
-                        >
-                          <div>{r.d}</div>
-                          <div className="text-right tabular-nums">{r.q}</div>
-                          <div className="text-right tabular-nums text-muted-foreground">${r.r}</div>
-                          <div className="text-right tabular-nums font-medium">
-                            ${(r.q * r.r).toLocaleString()}
-                          </div>
-                        </div>
-                      ))}
+                    : (
+                      <div className="py-8 text-center text-muted-foreground text-xs">
+                        No line items recorded for this invoice.
+                      </div>
+                    )}
                 </div>
               </div>
 
@@ -237,20 +351,64 @@ function InvoicePreview() {
                 <div className="flex justify-between text-muted-foreground">
                   <span>Subtotal</span>
                   <span className="tabular-nums">
-                    ${((data?.invoice.subtotalCents || 957000) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    $
+                    {(
+                      (data?.invoice.subtotalCents || 0) / 100
+                    ).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </span>
                 </div>
+                {Boolean(data?.invoice.discountCents && data.invoice.discountCents > 0) && (
+                  <div className="flex justify-between text-success">
+                    <span>Discount</span>
+                    <span className="tabular-nums">
+                      -$
+                      {(
+                        (data?.invoice.discountCents || 0) / 100
+                      ).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between text-muted-foreground">
                   <span>Tax</span>
                   <span className="tabular-nums">
-                    ${((data?.invoice.taxCents || 83738) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    $
+                    {(
+                      (data?.invoice.taxCents || 0) / 100
+                    ).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </span>
                 </div>
+                {Boolean(data?.invoice.amountPaidCents && data.invoice.amountPaidCents > 0 && !isPaid) && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Amount paid</span>
+                    <span className="tabular-nums">
+                      -$
+                      {(
+                        (data?.invoice.amountPaidCents || 0) / 100
+                      ).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
                 <div className="h-px bg-border" />
                 <div className="flex justify-between text-lg font-display">
                   <span>Total due</span>
                   <span className="tabular-nums">
-                    ${(totalDueCents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    $
+                    {(totalDueCents / 100).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </span>
                 </div>
               </div>
@@ -273,12 +431,15 @@ function InvoicePreview() {
                   <button
                     onClick={handlePayInvoice}
                     disabled={isPaying}
-                    className="rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-[12px] font-medium hover:bg-primary/90 disabled:opacity-60"
+                    className="rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-[12px] font-medium hover:bg-primary/90 disabled:opacity-60 cursor-pointer"
                   >
                     {isPaying ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      `Pay $${(totalDueCents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      `Pay $${(totalDueCents / 100).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}`
                     )}
                   </button>
                 )}

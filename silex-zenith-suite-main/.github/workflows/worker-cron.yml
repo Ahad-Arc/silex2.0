@@ -1,0 +1,19 @@
+name: SILEX Automation Worker Cron
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  trigger-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Automation Worker Endpoint
+        run: |
+          if [ -z "${{ secrets.APP_URL }}" ] || [ -z "${{ secrets.CRON_SECRET }}" ]; then
+            echo "APP_URL or CRON_SECRET not configured in repository secrets. Skipping ping."
+            exit 0
+          fi
+          curl -s -f -X POST "${{ secrets.APP_URL }}/api/v1/automation/worker" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

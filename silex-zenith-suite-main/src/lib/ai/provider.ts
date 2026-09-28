@@ -72,7 +72,7 @@ export class GeminiAIProvider implements AIProvider {
 
   constructor(
     apiKey: string,
-    model: string = "gemini-2.5-flash",
+    model: string = "gemini-3.6-flash",
     embeddingModel: string = "gemini-embedding-001",
   ) {
     this.apiKey = apiKey;

@@ -12,11 +12,6 @@ import { outboxEvents } from "@/db/schema";
 import { executeWorkflowForOutboxEvent } from "./runner";
 import type { OutboxEventRecord } from "@/lib/events/types";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: Outbox processor must NEVER be executed in browser environments."
-  );
-}
 
 /**
  * Maps raw SQL query results to typed OutboxEventRecord

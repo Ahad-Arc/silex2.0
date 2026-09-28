@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Bell, Check, DollarSign, Users, FileText, Sparkles, AlertTriangle, Loader2 } from "lucide-react";
+import { Bell, Check, DollarSign, Users, FileText, Sparkles, AlertTriangle, Loader2, Settings } from "lucide-react";
 import { useAuth } from "@/lib/supabase";
 import {
   getNotificationsFn,
@@ -126,9 +126,19 @@ function Notifications() {
             Everything that matters, nothing that doesn't.
           </p>
         </div>
-        <button onClick={handleMarkAllRead} className="text-[12px] text-primary hover:underline">
-          Mark all read
-        </button>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/app/settings"
+            search={{ tab: "notifications" }}
+            className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground transition rounded-lg border border-border/60 bg-card/60 px-2.5 py-1"
+          >
+            <Settings className="h-3.5 w-3.5" />
+            <span>Preferences</span>
+          </Link>
+          <button onClick={handleMarkAllRead} className="text-[12px] text-primary hover:underline">
+            Mark all read
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-1 rounded-xl border border-border bg-card/60 p-0.5 text-[12px] w-fit">

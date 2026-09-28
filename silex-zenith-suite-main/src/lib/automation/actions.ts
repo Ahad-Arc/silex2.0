@@ -17,11 +17,6 @@ import {
   webhookDeliveries,
 } from "@/db/schema";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: Automation actions module must NEVER be loaded in client browser environments."
-  );
-}
 
 /**
  * Trusted Execution Context Contract

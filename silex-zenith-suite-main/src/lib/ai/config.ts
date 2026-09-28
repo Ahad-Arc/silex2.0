@@ -5,12 +5,6 @@
  * AI secrets MUST NEVER be exported or exposed to browser bundles.
  */
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "CRITICAL SECURITY ERROR: AI configuration modules must NEVER be imported or executed in client browser environments."
-  );
-}
-
 export interface AIConfig {
   provider: "gemini" | "openai" | "mock";
   model: string;
@@ -26,6 +20,11 @@ export interface AIConfig {
 }
 
 export function getAIConfig(): AIConfig {
+  if (typeof window !== "undefined") {
+    throw new Error(
+      "CRITICAL SECURITY ERROR: AI configuration modules must NEVER be executed in client browser environments."
+    );
+  }
   const provider = (process.env.AI_PROVIDER as "gemini" | "openai") || "gemini";
   const geminiKey = process.env.GEMINI_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
@@ -36,7 +35,7 @@ export function getAIConfig(): AIConfig {
 
   return {
     provider: hasApiKey ? provider : "mock",
-    model: process.env.AI_MODEL || (provider === "gemini" ? "gemini-2.5-flash" : "gpt-4o"),
+    model: process.env.AI_MODEL || (provider === "gemini" ? "gemini-3.6-flash" : "gpt-4o"),
     embeddingModel:
       process.env.AI_EMBEDDING_MODEL ||
       (provider === "gemini" ? "gemini-embedding-001" : "text-embedding-3-small"),

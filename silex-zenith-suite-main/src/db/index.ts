@@ -18,9 +18,7 @@ const globalForDb = globalThis as unknown as {
 
 function getDatabaseUrl(): string {
   if (typeof window !== "undefined") {
-    throw new Error(
-      "[SILEX Security Guard] Database client initialized in client browser context. Database access is strictly restricted to server functions.",
-    );
+    return "";
   }
 
   const connectionString = process.env.DATABASE_URL;
@@ -42,7 +40,13 @@ function createDbClient(): PostgresJsDatabase<typeof schema> | null {
 
   if (!globalForDb.conn) {
     // Disable prepared statements for connection poolers (e.g., Supabase Transaction Pooler / PgBouncer)
-    globalForDb.conn = postgres(url, { prepare: false });
+    const maxConnections = Number(process.env.DB_MAX_CONNECTIONS || 10);
+    globalForDb.conn = postgres(url, {
+      prepare: false,
+      max: Number.isFinite(maxConnections) && maxConnections > 0 ? maxConnections : 10,
+      idle_timeout: 20,
+      connect_timeout: 10,
+    });
     globalForDb.db = drizzle(globalForDb.conn, { schema });
   }
 

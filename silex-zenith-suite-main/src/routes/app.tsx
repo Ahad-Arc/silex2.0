@@ -14,7 +14,10 @@ function ProtectedAppLayout() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      const currentPath = typeof window !== "undefined" ? window.location.pathname : "/app";
+      const currentPath =
+        typeof window !== "undefined"
+          ? `${window.location.pathname}${window.location.search}`
+          : "/app";
       navigate({
         to: "/auth",
         search: { redirect: currentPath },
