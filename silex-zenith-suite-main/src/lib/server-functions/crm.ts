@@ -11,7 +11,7 @@ import {
   users,
   aiMemory,
 } from "@/db/schema";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, desc, sql } from "drizzle-orm";
 
 // Address validation schema
 export const addressSchema = z.object({
@@ -153,28 +153,31 @@ export const getClientsFn = createServerFn({ method: "GET" })
       )
       .orderBy(desc(clients.createdAt));
 
-    // Query active invoices for this workspace to compute real aggregate metrics per client
-    const invoiceRows = await db
+    // Query active invoices for this workspace aggregated by client using SQL GROUP BY
+    const invoiceAggs = await db
       .select({
         clientId: invoices.clientId,
-        totalCents: invoices.totalCents,
+        totalInvoicedCents: sql<number>`coalesce(sum(${invoices.totalCents}), 0)::int`,
+        invoicesCount: sql<number>`count(*)::int`,
       })
       .from(invoices)
       .where(
         and(
           eq(invoices.workspaceId, auth.workspaceId),
           isNull(invoices.deletedAt),
+          isNotNull(invoices.clientId),
         ),
-      );
+      )
+      .groupBy(invoices.clientId);
 
     const invoiceStatsByClient: Record<string, { totalInvoicedCents: number; invoicesCount: number }> = {};
-    for (const inv of invoiceRows) {
-      if (!inv.clientId) continue;
-      if (!invoiceStatsByClient[inv.clientId]) {
-        invoiceStatsByClient[inv.clientId] = { totalInvoicedCents: 0, invoicesCount: 0 };
+    for (const agg of invoiceAggs) {
+      if (agg.clientId) {
+        invoiceStatsByClient[agg.clientId] = {
+          totalInvoicedCents: Number(agg.totalInvoicedCents) || 0,
+          invoicesCount: Number(agg.invoicesCount) || 0,
+        };
       }
-      invoiceStatsByClient[inv.clientId].totalInvoicedCents += Number(inv.totalCents) || 0;
-      invoiceStatsByClient[inv.clientId].invoicesCount += 1;
     }
 
     return clientRows.map(({ client, contact }) => {

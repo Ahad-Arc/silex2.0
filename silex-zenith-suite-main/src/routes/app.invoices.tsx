@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Search, Filter, Plus, MoreHorizontal, Loader2, AlertCircle } from "lucide-react";
 import { getInvoicesFn } from "@/lib/server-functions/invoices";
 
@@ -80,14 +80,19 @@ function Invoices() {
     loadInvoices();
   }, []);
 
-  const filteredInvoices = invoicesList.filter((inv) => {
-    const matchesSearch =
-      inv.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inv.clientName.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredInvoices = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    const tab = activeTab.toLowerCase();
 
-    if (activeTab === "All") return matchesSearch;
-    return matchesSearch && inv.status.toLowerCase() === activeTab.toLowerCase();
-  });
+    return invoicesList.filter((inv) => {
+      const matchesSearch =
+        inv.invoiceNumber.toLowerCase().includes(q) ||
+        inv.clientName.toLowerCase().includes(q);
+
+      if (activeTab === "All") return matchesSearch;
+      return matchesSearch && inv.status.toLowerCase() === tab;
+    });
+  }, [invoicesList, searchQuery, activeTab]);
 
   return (
     <div className="space-y-6">

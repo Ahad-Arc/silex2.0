@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   Camera,
@@ -48,12 +48,26 @@ function getInitials(name?: string, email?: string): string {
 }
 
 function Profile() {
+  const navigate = useNavigate();
   const { user: authUser, signOut } = useAuth();
   const [profileData, setProfileData] = useState<UserProfileResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
+
+  const handleSignOut = async () => {
+    try {
+      setIsSigningOut(true);
+      await signOut();
+      navigate({ to: "/auth", replace: true });
+    } catch {
+      navigate({ to: "/auth", replace: true });
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   const loadProfile = async () => {
     setIsLoading(true);
@@ -197,10 +211,16 @@ function Profile() {
               </button>
               <button
                 type="button"
-                onClick={() => signOut()}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 text-destructive px-3.5 py-2 text-[13px] font-medium hover:bg-destructive/20 transition"
+                onClick={handleSignOut}
+                disabled={isSigningOut}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 text-destructive px-3.5 py-2 text-[13px] font-medium hover:bg-destructive/20 transition disabled:opacity-50"
               >
-                <LogOut className="h-3.5 w-3.5" /> Sign out
+                {isSigningOut ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <LogOut className="h-3.5 w-3.5" />
+                )}
+                Sign out
               </button>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Search,
   Filter,
@@ -136,15 +136,37 @@ function Clients() {
     }
   };
 
-  const filteredClients = clientsList.filter((c) => {
-    const matchesSearch =
-      c.n.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.contact.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.email.toLowerCase().includes(searchQuery.toLowerCase());
+  const clientStats = useMemo(() => {
+    let active = 0;
+    let leads = 0;
+    let pending = 0;
+    for (const c of clientsList) {
+      if (c.status === "Active") active++;
+      else if (c.status === "Lead") leads++;
+      else if (c.status === "Overdue" || c.status === "Paused") pending++;
+    }
+    return {
+      active,
+      leads,
+      pending,
+      total: clientsList.length,
+    };
+  }, [clientsList]);
 
-    if (activeTab === "All") return matchesSearch;
-    return matchesSearch && c.status.toLowerCase() === activeTab.toLowerCase();
-  });
+  const filteredClients = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    const tab = activeTab.toLowerCase();
+
+    return clientsList.filter((c) => {
+      const matchesSearch =
+        c.n.toLowerCase().includes(q) ||
+        c.contact.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q);
+
+      if (activeTab === "All") return matchesSearch;
+      return matchesSearch && c.status.toLowerCase() === tab;
+    });
+  }, [clientsList, searchQuery, activeTab]);
 
   return (
     <div className="space-y-6">
@@ -166,10 +188,10 @@ function Clients() {
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         {[
-          { l: "Active", v: `${clientsList.filter((c) => c.status === "Active").length}`, d: "active clients" },
-          { l: "Total Clients", v: `${clientsList.length}`, d: "in workspace" },
-          { l: "Leads", v: `${clientsList.filter((c) => c.status === "Lead").length}`, d: "sales pipeline" },
-          { l: "Pending Action", v: `${clientsList.filter((c) => c.status === "Overdue" || c.status === "Paused").length}`, d: "overdue or paused" },
+          { l: "Active", v: `${clientStats.active}`, d: "active clients" },
+          { l: "Total Clients", v: `${clientStats.total}`, d: "in workspace" },
+          { l: "Leads", v: `${clientStats.leads}`, d: "sales pipeline" },
+          { l: "Pending Action", v: `${clientStats.pending}`, d: "overdue or paused" },
         ].map((s) => (
           <div key={s.l} className="rounded-2xl border border-border/70 bg-card/70 p-5 hover-lift">
             <div className="text-[12px] uppercase tracking-widest text-muted-foreground">{s.l}</div>
