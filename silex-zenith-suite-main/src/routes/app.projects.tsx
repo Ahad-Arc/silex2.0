@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Search,
   Filter,
@@ -91,17 +91,21 @@ function Projects() {
     loadProjects();
   }, []);
 
-  const filteredProjects = projectsList.filter((p) => {
+  const filteredProjects = useMemo(() => {
     const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      p.name.toLowerCase().includes(q) ||
-      (p.code && p.code.toLowerCase().includes(q)) ||
-      (p.description && p.description.toLowerCase().includes(q)) ||
-      p.clientName.toLowerCase().includes(q);
+    const tab = activeTab.toLowerCase();
 
-    if (activeTab === "All") return matchesSearch;
-    return matchesSearch && p.status.toLowerCase() === activeTab.toLowerCase();
-  });
+    return projectsList.filter((p) => {
+      const matchesSearch =
+        p.name.toLowerCase().includes(q) ||
+        (p.code && p.code.toLowerCase().includes(q)) ||
+        (p.description && p.description.toLowerCase().includes(q)) ||
+        p.clientName.toLowerCase().includes(q);
+
+      if (activeTab === "All") return matchesSearch;
+      return matchesSearch && p.status.toLowerCase() === tab;
+    });
+  }, [projectsList, searchQuery, activeTab]);
 
   return (
     <div className="space-y-6">

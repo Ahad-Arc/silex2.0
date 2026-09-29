@@ -56,7 +56,7 @@ export function AppShell() {
   } | null>(null);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  // Initial notification count fetch
+  // Notification count fetch (initial mount and entering/leaving notifications view)
   useEffect(() => {
     async function loadNotificationStats() {
       try {
@@ -67,7 +67,7 @@ export function AppShell() {
       }
     }
     loadNotificationStats();
-  }, [pathname]);
+  }, [pathname === "/app/notifications"]);
 
   // Load active authenticated workspace info
   useEffect(() => {

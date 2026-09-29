@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { getSupabaseBrowserClient, sanitizeRedirectPath } from "@/lib/supabase";
 import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/auth/callback")({
@@ -35,7 +35,8 @@ function AuthCallback() {
         }
 
         const code = urlParams.get("code");
-        const nextRedirect = urlParams.get("redirect") || hashParams.get("redirect") || "/app";
+        const rawRedirect = urlParams.get("redirect") || hashParams.get("redirect");
+        const nextRedirect = sanitizeRedirectPath(rawRedirect, "/app");
 
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);

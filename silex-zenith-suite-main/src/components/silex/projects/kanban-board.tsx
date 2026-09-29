@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Circle,
   Clock,
@@ -63,24 +63,28 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 }) => {
   // Map/normalize task statuses into canonical columns
   // Legacy 'done' is mapped to 'completed'
-  const tasksByColumn = KANBAN_COLUMNS.reduce((acc, col) => {
-    acc[col.id] = [];
-    return acc;
-  }, {} as Record<string, TaskItem[]>);
+  const tasksByColumn = useMemo(() => {
+    const grouped = KANBAN_COLUMNS.reduce((acc, col) => {
+      acc[col.id] = [];
+      return acc;
+    }, {} as Record<string, TaskItem[]>);
 
-  for (const task of tasks) {
-    let normalizedStatus = (task.status || "todo").toLowerCase();
-    if (normalizedStatus === "done") {
-      normalizedStatus = "completed";
+    for (const task of tasks) {
+      let normalizedStatus = (task.status || "todo").toLowerCase();
+      if (normalizedStatus === "done") {
+        normalizedStatus = "completed";
+      }
+
+      if (grouped[normalizedStatus]) {
+        grouped[normalizedStatus].push(task);
+      } else {
+        // Default unknown or fallback status to 'todo'
+        grouped["todo"].push(task);
+      }
     }
 
-    if (tasksByColumn[normalizedStatus]) {
-      tasksByColumn[normalizedStatus].push(task);
-    } else {
-      // Default unknown or fallback status to 'todo'
-      tasksByColumn["todo"].push(task);
-    }
-  }
+    return grouped;
+  }, [tasks]);
 
   const totalTaskCount = tasks.length;
 

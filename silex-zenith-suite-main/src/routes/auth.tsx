@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-r
 import { useState, useEffect } from "react";
 import { ArrowRight, Mail, Lock, Github, Chrome, Loader2, User } from "lucide-react";
 import { SilexLogo } from "@/components/silex/logo";
-import { getSupabaseBrowserClient, useAuth } from "@/lib/supabase";
+import { getSupabaseBrowserClient, useAuth, sanitizeRedirectPath } from "@/lib/supabase";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -24,8 +24,9 @@ function Auth() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Parse redirect parameter if present (supports redirect or redirectTo)
-  const redirectTarget = search.redirect || search.redirectTo || "/app";
+  // Parse and sanitize redirect parameter to prevent open redirects and redirect loops
+  const rawTarget = search.redirect || search.redirectTo;
+  const redirectTarget = sanitizeRedirectPath(rawTarget, "/app");
 
   // Redirect if already authenticated
   useEffect(() => {

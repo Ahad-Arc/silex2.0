@@ -30,7 +30,7 @@ import { getSupabaseEnv } from "@/lib/supabase/config";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AuthContextError, getServerAuthContext } from "@/lib/supabase/server-context";
-import { requireAuthGuard } from "@/lib/supabase/protected-route";
+import { requireAuthGuard, sanitizeRedirectPath } from "@/lib/supabase/protected-route";
 
 test("1. UNAUTHENTICATED ROUTE ACCESS — Protected route guard redirects to /auth", async () => {
   // In Node/server test environment without active session, requireAuthGuard must redirect
@@ -343,5 +343,49 @@ test("9. SERVER-SIDE AUTHORIZATION SECURITY BOUNDARY — Client execution blocke
   assert.ok(
     workspaceAuthSource.includes("typeof window !== \"undefined\""),
     "requireWorkspaceAccess must contain browser execution guard",
+  );
+});
+
+test("10. REDIRECT SANITIZATION & LOOP PREVENTION — Protects against open redirects and redirect loops", () => {
+  // 1. Preserves safe relative routes with query parameters and hash fragments
+  assert.equal(
+    sanitizeRedirectPath("/app/projects?view=board#sprint-1"),
+    "/app/projects?view=board#sprint-1",
+    "Must preserve safe relative paths with query parameters and hash",
+  );
+
+  // 2. Safe fallbacks for missing or empty inputs
+  assert.equal(sanitizeRedirectPath(null), "/app");
+  assert.equal(sanitizeRedirectPath(undefined), "/app");
+  assert.equal(sanitizeRedirectPath(""), "/app");
+  assert.equal(sanitizeRedirectPath("   "), "/app");
+
+  // 3. Infinite redirect loop prevention: blocks /auth and sub-paths
+  assert.equal(sanitizeRedirectPath("/auth"), "/app", "Must prevent looping back to /auth");
+  assert.equal(sanitizeRedirectPath("/auth/callback"), "/app", "Must prevent looping to /auth/callback");
+  assert.equal(sanitizeRedirectPath("/auth?redirect=/app"), "/app", "Must prevent looping to /auth with query");
+
+  // 4. Open redirect prevention: blocks external origins and protocol tricks
+  assert.equal(sanitizeRedirectPath("https://evil.com/phish"), "/app", "Must reject external absolute URLs");
+  assert.equal(sanitizeRedirectPath("http://attacker.org"), "/app", "Must reject external http URLs");
+  assert.equal(sanitizeRedirectPath("//evil.com"), "/app", "Must reject protocol-relative URLs");
+  assert.equal(sanitizeRedirectPath("/\\evil.com"), "/app", "Must reject backslash bypass attempts");
+  assert.equal(sanitizeRedirectPath("\\evil.com"), "/app", "Must reject leading backslash attempts");
+  assert.equal(sanitizeRedirectPath("javascript:alert(1)"), "/app", "Must reject javascript: pseudo-protocol");
+
+  // 5. Control character injection defense
+  assert.equal(sanitizeRedirectPath("/app\r\nSet-Cookie:admin=1"), "/app", "Must reject CRLF control characters");
+
+  // 6. Source-level verification: auth.tsx and auth.callback.tsx both call sanitizeRedirectPath
+  const authSource = fs.readFileSync(path.join(srcDir, "routes/auth.tsx"), "utf-8");
+  assert.ok(
+    authSource.includes("sanitizeRedirectPath(rawTarget"),
+    "auth.tsx must sanitize redirect target",
+  );
+
+  const callbackSource = fs.readFileSync(path.join(srcDir, "routes/auth.callback.tsx"), "utf-8");
+  assert.ok(
+    callbackSource.includes("sanitizeRedirectPath(rawRedirect"),
+    "auth.callback.tsx must sanitize redirect target",
   );
 });

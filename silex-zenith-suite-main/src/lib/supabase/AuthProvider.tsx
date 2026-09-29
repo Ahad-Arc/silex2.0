@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 import type { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "./client";
 
@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
     setIsLoading(true);
     try {
@@ -88,9 +88,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setSession(null);
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const refreshSession = async (): Promise<Session | null> => {
+  const refreshSession = useCallback(async (): Promise<Session | null> => {
     const supabase = getSupabaseBrowserClient();
     const { data, error: refreshErr } = await supabase.auth.refreshSession();
     if (refreshErr) {
@@ -100,18 +100,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setSession(data.session);
     setUser(data.session?.user ?? null);
     return data.session;
-  };
+  }, []);
 
-  const value: AuthState = {
-    user,
-    session,
-    isLoading,
-    isAuthenticated: !!user && !!session,
-    accessToken: session?.access_token ?? null,
-    error,
-    signOut,
-    refreshSession,
-  };
+  const value: AuthState = useMemo(
+    () => ({
+      user,
+      session,
+      isLoading,
+      isAuthenticated: !!user && !!session,
+      accessToken: session?.access_token ?? null,
+      error,
+      signOut,
+      refreshSession,
+    }),
+    [user, session, isLoading, error, signOut, refreshSession],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
